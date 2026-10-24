@@ -262,7 +262,8 @@ function toCell_(rec, k, t, ctx, c) {
   if (t === 'ref') return refText_(c, rec, ctx);
   if (t === 'sc') return scText_(rec.sc, ctx);
   if (t === 'calc') return calc_(c, k, rec, ctx);
-  return rec[k] == null ? '' : rec[k];
+  const v = rec[k] == null ? '' : rec[k];
+  return typeof v === 'string' && /^[=+@]/.test(v) ? "'" + v : v;
 }
 
 function scText_(sc, ctx) {
@@ -400,7 +401,7 @@ function fixNew_(c, r) {
 function validNew_(c, r) {
   const req = SCHEMA[c].req;
   if (!req) return false;
-  return req.every(function (k) { return r[k] !== undefined && r[k] !== '' && r[k] !== null && r[k] !== 0; });
+  return req.every(function (k) { if (r[k] === undefined || r[k] === '' || r[k] === null) return false; if (k === 'valor') return Number(r[k]) > 0; return true; });
 }
 
 function writeTab_(T, recs, ctx) {
@@ -441,14 +442,14 @@ function sync_(body, role) {
       R[c].forEach(function (rec) { if (rec.id) IDX[c][rec.id] = rec; });
     });
     ctx = ctx_(R);
-    const seen = {};
+    const seen = {}, force = {};
     let acc = 0, rej = 0;
     if (R0.write) (body.changes || []).forEach(function (ch) {
       const c = ch.c, rec = ch.rec;
       if (COLLS.indexOf(c) < 0 || !rec || !rec.id) return;
       seen[c + ':' + rec.id] = 1;
       const cur = IDX[c][rec.id];
-      if (cur && (Number(cur.upd) || 0) > (Number(rec.upd) || 0)) { rej++; delete seen[c + ':' + rec.id]; return; }
+      if (cur && (Number(cur.upd) || 0) > (Number(rec.upd) || 0)) { rej++; delete seen[c + ':' + rec.id]; force[c + ':' + rec.id] = 1; return; }
       const nr = clean_(rec); nr.srv = now;
       if (cur) { const i = cur.__i; Object.keys(cur).forEach(function (k) { delete cur[k]; }); Object.assign(cur, nr); cur.__i = i; }
       else { nr.__i = -1; R[c].push(nr); IDX[c][nr.id] = nr; }
@@ -462,7 +463,7 @@ function sync_(body, role) {
       if (!R0.read(c)) return;
       R[c].forEach(function (rec) {
         if (rec.__skip || !rec.id || seen[c + ':' + rec.id]) return;
-        if (since === 0 || (Number(rec.srv) || 0) > since) out.push({c: c, rec: clean_(rec)});
+        if (since === 0 || (Number(rec.srv) || 0) > since || force[c + ':' + rec.id]) out.push({c: c, rec: clean_(rec)});
       });
     });
     return {ok: true, serverTime: now, changes: out, accepted: acc, rejected: rej, role: role, scope: R0.scope};

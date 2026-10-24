@@ -439,7 +439,8 @@ const OBLT={
  eq:[['Cambio de aceite',1,'Mantenimiento'],['Cambio de filtros',3,'Mantenimiento'],['Mantenimiento preventivo',6,'Mantenimiento'],['Revisión general',12,'Mantenimiento'],['Otro',0,'Otro']]
 };
 function addMonths(s,n){const [y,m,d]=s.split('-').map(Number);const t=new Date(y,m-1+n,1);const last=new Date(t.getFullYear(),t.getMonth()+1,0).getDate();return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(Math.min(d,last)).padStart(2,'0')}
-function planFor(c,a){const t=today();const P=(tipo,meses,nota,fecha)=>({tipo,meses,nota,fecha:fecha||addMonths(t,meses)});
+const LEGAL=['SOAT','Revisión técnico-mecánica','Seguro todo riesgo','Impuesto predial'];
+function planFor(c,a){const t=today();const P=(tipo,meses,nota,fecha)=>({tipo,meses,nota,fecha:fecha||addMonths(t,meses),est:!fecha&&LEGAL.includes(tipo)});
  if(c==='veh'){const moto=/moto/i.test(a.tipoV||''),pub=a.servicio==='Público';
   let tf='';if(a.matricula){tf=addMonths(a.matricula,(moto||pub)?24:60);while(tf<t)tf=addMonths(tf,12)}
   const out=[P('SOAT',12,'Obligatorio para circular. Renuévalo antes del vencimiento.'),P('Revisión técnico-mecánica',12,(moto||pub)?'Primera a los 2 años de la matrícula; luego cada año.':'Particular: primera a los 5 años de la matrícula; luego cada año.',tf)];
@@ -454,7 +455,7 @@ function planFor(c,a){const t=today();const P=(tipo,meses,nota,fecha)=>({tipo,me
   return [P('Cambio de aceite',1,'O cada 100 a 250 horas de uso, según el manual del motor.'),P('Cambio de filtros',3,'Aire, combustible y aceite.'),P('Mantenimiento preventivo',6,'Bujías o inyectores, correas, mangueras y sistema eléctrico.')]}
  return []}
 const PLAN_OPTS={veh:['SOAT','Revisión técnico-mecánica','Seguro todo riesgo','Cambio de aceite','Alineación y balanceo','Mantenimiento preventivo'],cab:['Herraje','Desparasitación','Vacunación','Odontología equina'],inm:['Impuesto predial','Mantenimiento preventivo'],eq:['Cambio de aceite','Cambio de filtros','Mantenimiento preventivo','Revisión general']};
-function applyPlan(c,a,names,known={}){let n=0;planFor(c,a).filter(p=>names.includes(p.tipo)).forEach(p=>{if(L('obl').some(o=>o.ac===c&&o.aid===a.id&&o.tipo===p.tipo&&!o.done))return;upsert('obl',{ac:c,aid:a.id,tipo:p.tipo,fecha:known[p.tipo]||p.fecha,meses:p.meses,nota:p.nota,hist:[],done:false});n++});return n}
+function applyPlan(c,a,names,known={}){let n=0;planFor(c,a).filter(p=>names.includes(p.tipo)).forEach(p=>{if(L('obl').some(o=>o.ac===c&&o.aid===a.id&&o.tipo===p.tipo&&!o.done))return;upsert('obl',{ac:c,aid:a.id,tipo:p.tipo,fecha:known[p.tipo]||p.fecha,meses:p.meses,nota:p.nota,hist:[],done:false,est:!known[p.tipo]&&p.est});n++});return n}
 const oblName=o=>o.tipo==='Otro'?(o.nombre||'Otro'):o.tipo;
 const assetOf=o=>byId(o.ac,o.aid);
 const daysTo=d=>Math.round((new Date(d+'T12:00:00')-new Date(today()+'T12:00:00'))/864e5);
@@ -554,6 +555,7 @@ function report(f,t){
  mk('personal','Gastos personales',M.filter(r=>r.p==='personal'),'personal');
  mk('parcela','Parcela Las Colinas',M.filter(r=>r.p==='parcela'),'parcela');
  L('inm').forEach(i=>{const x=mk('inm:'+i.id,i.nombre,M.filter(r=>r.p==='inm'&&r.inm===i.id),'inm');x.pres=i.pres});
+ const sinInm=M.filter(r=>r.p==='inm'&&!L('inm').some(i=>i.id===r.inm));if(sinInm.length)mk('inm:?','Inmuebles (sin asignar)',sinInm,'inm');
  const mn=mk('mina','Mina La Fe',M.filter(r=>r.p==='mina'),'mina');
  const rc=retroCalc(f,t);mn.cos+=rc.costoMina;mn.subs['Retroexcavadora (renta y combustible)']=rc.costoMina;mn.retro=rc;
  const cs=L('cortes').filter(c=>inP(c.fecha,f,t));mn.ing=sum(cs,c=>c.invCop);mn.oroG=sum(cs,c=>c.gramos);mn.bruto=sum(cs,c=>c.total);mn.cortes=cs.length;
@@ -742,7 +744,7 @@ SPV.cortes=()=>{
  <div class="hstat" style="margin-top:12px"><div><small>Dueño terreno</small><b>${pc.ter}%</b></div><div><small>Empleados directos</small><b>${pc.emp}%</b></div><div><small>Comisionista</small><b>${pc.com}%</b></div><div><small>Administrador</small><b>${pc.adm}%</b></div><div><small>Dueño de la mina</small><b class="pos">${inv}%</b></div></div></div>
  ${cs.length?cs.map(c=>`<div class="card"><div class="split"><div><h3 style="margin:0 0 4px">Corte del ${fd(c.fecha)}</h3><div class="mut" style="font-size:13px">${fg(c.gramos)} g · ${fmt(c.precio)} por gramo${c.obs?' · '+esc(c.obs):''}</div></div><div class="bar"><b class="gold" style="font:700 22px var(--f-disp)">${fmt(c.total)}</b><button class="ib dan del-only" data-act="del" data-c="cortes" data-id="${c.id}" title="Eliminar corte">${ic('trash')}</button></div></div>
   <div class="tw" style="margin-top:10px">${liqTable(c.liq)}</div>
-  <div class="hstat" style="margin-top:12px"><div><small>Abono a costos</small><b>${fmt(c.abono)}</b></div><div><small>Disponible inversionista</small><b class="pos">${fmt(c.invCop-c.abono)}</b></div><div><small>Pendiente antes del corte</small><b>${fmt(c.pendAntes)}</b></div></div></div>`).join(''):`<div class="card empty">Aún no hay cortes. Cuando laves oro, toca “Registrar lavado de oro”: el reparto se calcula solo y descuenta los anticipos.</div>`}`;
+  <div class="hstat" style="margin-top:12px"><div><small>Abono a costos</small><b>${fmt(c.abono)}</b></div><div><small>Disponible inversionista</small><b class="pos">${fmt(c.invCop-c.abono)}</b></div>${sum(c.liq||[],l=>l.desc)?`<div><small>Reintegro de anticipos</small><b>${fmt(sum(c.liq||[],l=>l.desc))}</b></div>`:''}<div><small>Pendiente antes del corte</small><b>${fmt(c.pendAntes)}</b></div></div></div>`).join(''):`<div class="card empty">Aún no hay cortes. Cuando laves oro, toca “Registrar lavado de oro”: el reparto se calcula solo y descuenta los anticipos.</div>`}`;
 };
 function liqTable(liq){return `<table class="t"><thead><tr><th>Beneficiario</th><th class="n">%</th><th class="n">Gramos</th><th class="n">Valor</th><th class="n">Anticipos desc.</th><th class="n">Neto</th></tr></thead><tbody>${(liq||[]).map(l=>`<tr class="rw"><td>${esc(l.label)}${l.nombre?`<div class="mut" style="font-size:12px">${esc(l.nombre)}</div>`:''}</td><td class="n">${fg(l.pct)}%</td><td class="n gold">${fg(l.g)}</td><td class="n">${fmt(l.cop)}</td><td class="n">${l.desc?fmt(-l.desc):'—'}</td><td class="n ${l.key==='inv'?'pos':''}">${fmt(l.neto)}</td></tr>`).join('')}</tbody></table>`}
 
@@ -848,7 +850,7 @@ function monthChart(s){
 function alerts(){
  const a=[];const t=today(),lim=addDays(t,30);
  L('obl').filter(o=>!o.done&&assetOf(o)&&!assetOf(o).del).sort((x,z)=>x.fecha.localeCompare(z.fecha)).forEach(o=>{const n=ASSET[o.ac].name(assetOf(o));if(o.fecha<t)a.push(['ba',`${n}: ${oblName(o)} vencido desde ${fd(o.fecha)}.`]);else if(o.fecha<=lim)a.push(['',`${n}: ${oblName(o)} vence el ${fd(o.fecha)}.`])});
- L('veh').forEach(v=>['SOAT','Revisión técnico-mecánica'].forEach(tp=>{if(!L('obl').some(o=>o.aid===v.id&&o.tipo===tp&&!o.done))a.push(['',`${v.placa}: registra la fecha de ${tp==='SOAT'?'vencimiento del SOAT':'la revisión técnico-mecánica'} en la ficha del vehículo.`])}));
+ L('veh').forEach(v=>['SOAT','Revisión técnico-mecánica'].forEach(tp=>{const o=L('obl').find(o=>o.aid===v.id&&o.tipo===tp&&!o.done);if(!o||o.est)a.push(['',`${v.placa}: ${o?'confirma':'registra'} la fecha de ${tp==='SOAT'?'vencimiento del SOAT':'la revisión técnico-mecánica'} en la ficha del vehículo.`])}));
  const {f}=retroPeriodo();const R=retroCalc(f,'');if(R.bajo)a.push(['',`Retroexcavadora: ${R.bajo} días por debajo de ${S.retroP.min} horas en el periodo actual.`]);
  const ant=sum(L('per').filter(p=>p.sc==='mina'),p=>anticiposPend(p.id));if(ant)a.push(['',`Mina: ${fmt(ant)} en anticipos por descontar en el próximo corte.`]);
  const pend=minaPendiente();if(pend)a.push(['ba',`Mina: ${fmt(pend)} en costos aún sin cubrir con cortes de oro.`]);
@@ -871,7 +873,6 @@ function vInicio(){
  <h3 style="margin-top:18px">Accesos rápidos</h3><div class="bar edit-only"><button class="btn sm" data-act="newCorteGo">${ic('gem')}Lavado de oro</button><button class="btn sm" data-act="newPrest">${ic('coin')}Prestar</button><button class="btn sm" data-act="newAbono">${ic('cash')}Recibir abono</button><button class="btn sm" data-act="newRh">${ic('dig')}Horas retro</button><button class="btn sm" data-act="quick">${ic('plus')}Otro gasto</button></div><div class="bar" style="margin-top:8px"><button class="btn sm" data-act="icsAll">${ic('cal')}Recordatorios al calendario</button></div></div></div>`;
 }
 
-/* Informes */
 /* Ajustes */
 function vAjustes(){
  const c=S.cfg;const pend=S.outbox.length;
@@ -912,10 +913,13 @@ function openForm(o){
  <div class="sft"><button type="button" class="btn gh" data-act="close">Cancelar</button><button type="submit" class="btn pri">${esc(o.ok||'Guardar')}</button></div></form>`;
  $('#modal').hidden=false;
  const frm=$('#frm');
- frm.addEventListener('submit',async e=>{e.preventDefault();const vals=readForm();const miss=o.fields.find(f=>f.req&&(!f.when||f.when(vals))&&(vals[f.k]===''||vals[f.k]==null||(['money','dec'].includes(f.t)&&!vals[f.k])));
+ frm.addEventListener('submit',async e=>{e.preventDefault();if(frm.dataset.busy)return;const vals=readForm();const miss=o.fields.find(f=>f.req&&(!f.when||f.when(vals))&&(vals[f.k]===''||vals[f.k]==null||(['money','dec'].includes(f.t)&&!vals[f.k])));
   if(miss){toast('Falta: '+miss.l.replace(/ \*$/,''));$('#f_'+miss.k)?.focus();return}
-  for(const ph of o.fields.filter(f=>f.t==='photo')){const fi=$('#f_'+ph.k);if(fi.files[0]){try{const fid=uid();const data=await compress(fi.files[0]);const rec={name:fi.files[0].name,data};await DB.put('files',fid,rec);IMG[fid]=rec;vals[ph.k]=fid;if(!ph.img)vals.fotoN=fi.files[0].name}catch(err){toast('No se pudo leer el archivo')}}else{delete vals[ph.k]}}
-  const msg=o.save(vals);if(msg===false)return;const back=o.back;closeModal();render();if(back)back();toast(msg||'Guardado')});
+  frm.dataset.busy='1';const sb=frm.querySelector('button[type=submit]');if(sb)sb.disabled=true;
+  const unbusy=()=>{delete frm.dataset.busy;if(sb)sb.disabled=false};
+  for(const ph of o.fields.filter(f=>f.t==='photo')){const fi=$('#f_'+ph.k);if(fi.files[0]){try{const fid=uid();const data=await compress(fi.files[0]);const rec={name:fi.files[0].name,data};await DB.put('files',fid,rec);IMG[fid]=rec;vals[ph.k]=fid;vals.fotoDrive='';vals.fotoUrl='';if(!ph.img)vals.fotoN=fi.files[0].name}catch(err){toast('No se pudo leer el archivo')}}else{delete vals[ph.k]}}
+  let msg;try{msg=o.save(vals)}catch(err){unbusy();toast('No se pudo guardar: '+(err.message||err));return}
+  if(msg===false){unbusy();return}const back=o.back;closeModal();render();if(back)back();toast(msg||'Guardado')});
   const vis=()=>{const v=readForm();o.fields.forEach(f=>{if(f.when){const w=$('#w_'+f.k);if(w)w.hidden=!f.when(v)}})};
  frm.addEventListener('input',e=>{if(e.target.matches('[data-money]'))moneyMask(e.target);vis();if(o.onInput)o.onInput(readForm())});
  frm.addEventListener('change',e=>{if(e.target.type==='file'){const fl=e.target.files[0];const n=$('#'+e.target.id+'_n');if(n&&!/image/.test(fl?.type||'')||n&&!$('#'+e.target.id+'_t'))n.textContent=fl?.name||'';const t=$('#'+e.target.id+'_t');if(t&&fl&&fl.type.startsWith('image/')){t.src=URL.createObjectURL(fl);t.hidden=false;if(n)n.textContent=''}}vis();if(o.onInput)o.onInput(readForm())});
@@ -969,7 +973,7 @@ function formMov(m,s,rec={},extra={}){
   const d=Object.assign({id:rec.id,p:m,s,nat:natFor(m,s,v.cat)},v);if(m==='inm')d.inm=v.inm||rec.inm||extra.inm||V.inm;if(!d.eq)delete d.eq;
   const r=upsert('mov',d);
   if(vence&&d.veh&&VMAP[v.cat]){const tp=VMAP[v.cat];const o=L('obl').find(o=>o.ac==='veh'&&o.aid===d.veh&&o.tipo===tp&&!o.done);
-   if(o)upsert('obl',{id:o.id,fecha:vence,hist:(o.hist||[]).concat([{fecha:d.fecha,mov:r.id,valor:d.valor,foto:d.foto||'',nota:d.nota||''}])});
+   if(o)upsert('obl',{id:o.id,fecha:vence,est:false,hist:(o.hist||[]).concat([{fecha:d.fecha,mov:r.id,valor:d.valor,foto:d.foto||'',nota:d.nota||''}])});
    else upsert('obl',{ac:'veh',aid:d.veh,tipo:tp,fecha:vence,meses:12,nota:'',hist:[{fecha:d.fecha,mov:r.id,valor:d.valor}],done:false})}
   return 'Registro guardado'}});
 }
@@ -1003,7 +1007,9 @@ function formCorte(){
   const ab=$('#f_abono');if(ab&&!ab.dataset.touched){const sug=Math.min(inv.cop,pend);ab.value=sug?Math.round(sug).toLocaleString('es-CO'):''}
   if(ab&&!ab._b){ab._b=1;ab.addEventListener('input',()=>ab.dataset.touched=1)}
   const abv=+(ab?.value.replace(/\D/g,''))||0;
-  $('#prev').innerHTML=total?`<div class="split" style="margin-bottom:8px"><b>${fg(g)} g · ${fmt(total)}</b><span class="mut">Costos por cubrir ${fmt(pend)}</span></div><div class="tw">${liqTable(liq)}</div><div class="kv" style="margin-top:10px"><span>Abono a costos</span><span>${fmt(abv)}</span><span>Queda pendiente</span><span>${fmt(Math.max(0,pend-abv))}</span><span>Disponible inversionista</span><span class="pos">${fmt(inv.cop-abv)}</span></div>`:'<span class="mut">Escribe la cantidad de oro y el precio para ver el reparto.</span>'},
+  const warn=(g>3000?`<div class="gold" style="margin-bottom:8px">Revisa la cantidad: ${fg(g)} gramos es mucho para un corte. Para decimales usa coma (125,4).</div>`:'')+(v.precio&&(v.precio<100000||v.precio>1500000)?`<div class="gold" style="margin-bottom:8px">Revisa el precio por gramo: ${fmt(v.precio)}.</div>`:'');
+  const rein=sum(liq,l=>l.desc);
+  $('#prev').innerHTML=total?`${warn}<div class="split" style="margin-bottom:8px"><b>${fg(g)} g · ${fmt(total)}</b><span class="mut">Costos por cubrir ${fmt(pend)}</span></div><div class="tw">${liqTable(liq)}</div><div class="kv" style="margin-top:10px"><span>Abono a costos</span><span>${fmt(abv)}</span><span>Queda pendiente</span><span>${fmt(Math.max(0,pend-abv))}</span><span>Disponible inversionista</span><span class="pos">${fmt(inv.cop-abv)}</span>${rein?`<span>Reintegro de anticipos al dueño</span><span>${fmt(rein)}</span>`:''}</div>`:'<span class="mut">Escribe la cantidad de oro y el precio para ver el reparto.</span>'},
  save:v=>{const g=v.und==='c'?v.cant*CAST:v.cant;const total=g*v.precio;const liq=reparto(total,g,v.part||[]);const inv=liq.find(l=>l.key==='inv');
   upsert('cortes',{fecha:v.fecha,gramos:g,precio:v.precio,total,part:v.part,liq,invCop:inv.cop,abono:Math.min(v.abono,inv.cop),pendAntes:minaPendiente(),obs:v.obs});return 'Corte registrado y repartido'}});
 }
@@ -1017,13 +1023,13 @@ function formAbono(prestId,rec={}){
  if(!act.length){toast('No hay préstamos con saldo');return}
  openForm({title:'Recibir pago o abono',rec,preview:true,fields:[{k:'prest',l:'Préstamo',t:'select',opts:act.map(p=>[p.id,`${p.nombre} · ${fd(p.fecha)} · saldo ${fmt(saldoPrest(p))}`]),v:rec.prest||prestId||act[0].id,req:1,w:1},{k:'fecha',l:'Fecha',t:'date',v:rec.fecha||today(),req:1},{k:'valor',l:'Valor recibido',t:'money',v:rec.valor??'',req:1},{k:'pago',l:'Forma de pago',t:'select',opts:PAGOS,v:rec.pago||'Efectivo'},{k:'nota',l:'Nota',v:rec.nota},{k:'foto',l:'Soporte',t:'photo',w:1}],
  onInput:v=>{const p=byId('prest',v.prest);if(!p)return;const s=saldoPrest(p)+(rec.valor||0);$('#prev').innerHTML=`<div class="kv"><span>Saldo actual</span><span>${fmt(s)}</span><span>Abono</span><span>${fmt(v.valor)}</span><span>Nuevo saldo</span><span class="${s-v.valor<0?'neg':'gold'}">${fmt(s-v.valor)}</span></div>`},
- save:v=>{upsert('abonos',Object.assign({id:rec.id},v));return 'Abono registrado'}});
+ save:v=>{const p=byId('prest',v.prest);const sal=p?saldoPrest(p)+(rec.valor||0):0;if(v.valor>sal+1){toast(`El abono supera el saldo del préstamo (${fmt(sal)})`);return false}upsert('abonos',Object.assign({id:rec.id},v));return 'Abono registrado'}});
 }
 function formRh(rec={}){
  const last=L('rh').slice().sort((a,b)=>a.fecha.localeCompare(b.fecha)).pop();
  openForm({title:rec.id?'Editar día':'Registrar horas del día',rec,preview:true,fields:[{k:'fecha',l:'Fecha',t:'date',v:rec.fecha||today(),req:1},{k:'operador',l:'Operador',v:rec.operador||last?.operador||''},{k:'hi',l:'Horómetro inicio',t:'dec',v:rec.hi??last?.hf??''},{k:'hf',l:'Horómetro final',t:'dec',v:rec.hf??''},{k:'obs',l:'Novedad',w:1,v:rec.obs,ph:'Ej. daño, festivo, lluvia'},{k:'foto',l:'Foto del horómetro',t:'photo',w:1}],
  onInput:v=>{const h=Math.max(0,v.hf-v.hi);$('#prev').innerHTML=`<div class="kv"><span>Horas</span><span class="${h&&h<S.retroP.min?'neg':''}">${fg(h)} h</span><span>Valor del día</span><span>${fmt(h*S.retroP.precio)}</span></div>`},
- save:v=>{if(v.hf<v.hi){toast('El horómetro final es menor que el inicial');return 'Revisa el horómetro'}v.horas=Math.round((v.hf-v.hi)*100)/100;upsert('rh',Object.assign({id:rec.id},v));return 'Horas registradas'}});
+ save:v=>{if(v.hf<v.hi){toast('El horómetro final es menor que el inicial');return false}v.horas=Math.round((v.hf-v.hi)*100)/100;upsert('rh',Object.assign({id:rec.id},v));return 'Horas registradas'}});
 }
 function formRs(rec={}){openForm({title:rec.id?'Editar salida':'Repuesto o reparación',rec,fields:[{k:'fecha',l:'Fecha',t:'date',v:rec.fecha||today(),req:1},{k:'tipo',l:'Tipo',t:'select',opts:['Repuesto','Reparación','Salario','Otro'],v:rec.tipo||'Repuesto'},{k:'concepto',l:'Concepto',v:rec.concepto,req:1,w:1},{k:'valor',l:'Valor',t:'money',v:rec.valor??'',req:1},{k:'asume',l:'Lo asume',t:'select',opts:['Dueño','Mina'],v:rec.asume||'Dueño',hint:'Dueño: se descuenta de la renta. Mina: costo de la mina.'},{k:'foto',l:'Soporte',t:'photo',w:1}],save:v=>{upsert('rs',Object.assign({id:rec.id},v));return 'Salida registrada'}})}
 function formRc(rec={}){openForm({title:rec.id?'Editar tanqueo':'Combustible o aceite',rec,fields:[{k:'fecha',l:'Fecha',t:'date',v:rec.fecha||today(),req:1},{k:'tipo',l:'Tipo',t:'select',opts:['ACPM','Gasolina','Aceite','Grasa','Otro'],v:rec.tipo||'ACPM'},{k:'cant',l:'Cantidad',t:'dec',v:rec.cant??''},{k:'und',l:'Unidad',t:'select',opts:['gal','lt','und'],v:rec.und||'gal'},{k:'valor',l:'Valor',t:'money',v:rec.valor??'',req:1},{k:'horo',l:'Horómetro',t:'dec',v:rec.horo??''},{k:'foto',l:'Soporte',t:'photo',w:1}],save:v=>{upsert('rc',Object.assign({id:rec.id},v));return 'Tanqueo registrado'}})}
@@ -1050,7 +1056,7 @@ function formEq(rec={}){const nw=!rec.id;const tipos=catsOf('mina','activos');
 function formObl(c,aid,rec={}){const T=OBLT[c];const names=T.map(x=>x[0]);const t0=rec.tipo||names[0];
  openForm({title:rec.id?'Editar obligación':'Nueva obligación o mantenimiento',rec,fields:[{k:'tipo',l:'Tipo',t:'select',opts:names,v:t0,req:1},{k:'nombre',l:'Nombre',v:rec.nombre,req:1,when:v=>v.tipo==='Otro',ph:'Ej. Cambio de llantas'},{k:'fecha',l:'Próximo vencimiento',t:'date',v:rec.fecha||addMonths(today(),(T.find(x=>x[0]===t0)||[0,1])[1]||1),req:1},{k:'meses',l:'Se repite cada (meses)',t:'dec',v:rec.meses??(T.find(x=>x[0]===t0)||[0,0])[1],hint:'0 = una sola vez.'},{k:'nota',l:'Recomendación o detalle',t:'area',w:1,v:rec.nota,ph:'Ej. aceite 15W40; cada 5.000 km'}],
  onInput:v=>{const me=$('#f_meses');if(!me||rec.id)return;if(!me._b){me._b=1;me._last=v.tipo;me.addEventListener('input',()=>me.dataset.t=1)}if(me._last!==v.tipo&&!me.dataset.t){const x=T.find(x=>x[0]===v.tipo);if(x){me.value=String(x[1]);const fe=$('#f_fecha');if(fe&&x[1])fe.value=addMonths(today(),x[1])}}me._last=v.tipo},
- save:v=>{if(v.tipo!=='Otro')delete v.nombre;v.meses=Math.max(0,Math.round(v.meses||0));upsert('obl',Object.assign({id:rec.id,ac:c,aid,hist:rec.hist||[]},v,{done:false}));return 'Obligación guardada'}})}
+ save:v=>{if(v.tipo!=='Otro')delete v.nombre;v.meses=Math.max(0,Math.round(v.meses||0));upsert('obl',Object.assign({id:rec.id,ac:c,aid,hist:rec.hist||[]},v,{done:false,est:false}));return 'Obligación guardada'}})}
 function formCumple(id){const o=byId('obl',id);const a=assetOf(o);const c=o.ac;const lect=c==='veh'?'Kilometraje':c==='eq'?'Horómetro':'';
  const f=[{k:'fecha',l:'Fecha en que se hizo',t:'date',v:today(),req:1},{k:'valor',l:'Valor pagado',t:'money',hint:'Déjalo vacío si no tuvo costo.'},{k:'tercero',l:c==='cab'?'Veterinario o herrero':c==='inm'?'Entidad o contratista':'Taller o proveedor'}];
  if(lect)f.push({k:'lect',l:lect,t:'dec',ph:c==='veh'?'Ej. 45.300':'Ej. 1.250'});
@@ -1060,7 +1066,7 @@ function formCumple(id){const o=byId('obl',id);const a=assetOf(o);const c=o.ac;c
  save:v=>{let mid='';const G=ASSET[c].g;
   if(v.valor>0){const map=(OBLT[c].find(x=>x[0]===o.tipo)||[])[2]||'Otro';const cl=catsOf(G.m,G.s);const cat=cl.includes(map)?map:(cl.includes('Mantenimiento')?'Mantenimiento':cl[cl.length-1]);
    const d={p:G.m,s:G.s,cat,nat:natFor(G.m,G.s,cat),concepto:oblName(o)+(v.lect?` · ${fg(v.lect)} ${c==='veh'?'km':'h'}`:''),tercero:v.tercero,valor:v.valor,fecha:v.fecha,pago:v.pago,nota:v.nota,[ASSET[c].link]:a.id};if(v.foto){d.foto=v.foto;d.fotoN=v.fotoN}mid=upsert('mov',d).id}
-  upsert('obl',{id:o.id,hist:(o.hist||[]).concat([{fecha:v.fecha,mov:mid,valor:v.valor||0,lect:v.lect||0,nota:v.nota||'',foto:v.foto||'',fotoN:v.fotoN||''}]),fecha:v.prox||o.fecha,done:!v.prox});
+  upsert('obl',{id:o.id,hist:(o.hist||[]).concat([{fecha:v.fecha,mov:mid,valor:v.valor||0,lect:v.lect||0,nota:v.nota||'',foto:v.foto||'',fotoN:v.fotoN||''}]),fecha:v.prox||o.fecha,done:!v.prox,est:false});
   return v.prox?'Cumplimiento registrado. Próximo: '+fd(v.prox):'Cumplimiento registrado'}})}
 function formCat(m,sb){const secs=SECS();const k0=m?m+'.'+sb:secs[0][0];const nsOf=k=>natsOf(...k.split('.'));
  const f=[];if(!m)f.push({k:'sec',l:'Rubro',t:'select',opts:secs,v:k0,req:1,w:1});
@@ -1088,7 +1094,7 @@ function openFicha(c,id){const r=byId(c,id);if(!r||r.del){closeModal();return}co
  </div><div class="sft"><button class="btn gh edit-only" data-act="edit" data-c="${c}" data-id="${id}">${ic('edit')}Editar datos</button><button class="btn pri edit-only" data-act="fichaGasto" data-c="${c}" data-id="${id}">${ic('plus')}Registrar gasto</button></div>`;
  $('#modal').hidden=false;FICHA={c,id};hydrate($('#sheet'));
 }
-function oblRow(o){const dd=daysTo(o.fecha);return `<div class="obl"><div style="min-width:0"><b>${esc(oblName(o))}</b> ${o.done?'<span class="tag">Cumplida</span>':dd<0?`<span class="tag ba">Vencida hace ${-dd} día${dd===-1?'':'s'}</span>`:dd<=30?`<span class="tag wa">${dd===0?'Vence hoy':'Vence en '+dd+' día'+(dd===1?'':'s')}</span>`:'<span class="tag ok">Al día</span>'}
+function oblRow(o){const dd=daysTo(o.fecha);return `<div class="obl"><div style="min-width:0"><b>${esc(oblName(o))}</b> ${o.est&&!o.done?'<span class="tag wa">Fecha por confirmar</span> ':''}${o.done?'<span class="tag">Cumplida</span>':dd<0?`<span class="tag ba">Vencida hace ${-dd} día${dd===-1?'':'s'}</span>`:dd<=30?`<span class="tag wa">${dd===0?'Vence hoy':'Vence en '+dd+' día'+(dd===1?'':'s')}</span>`:'<span class="tag ok">Al día</span>'}
  <div class="mut" style="font-size:12.5px;margin-top:2px">${o.meses?'Cada '+o.meses+(o.meses===1?' mes':' meses'):'Una sola vez'}${o.hist?.length?' · última vez '+fd(o.hist[o.hist.length-1].fecha):''}${o.nota?' · '+esc(o.nota):''}</div></div><div class="num" style="text-align:right">${fd(o.fecha)}</div>
  <div class="acts">${o.done?'':`<button class="btn sm pri edit-only" data-act="cumple" data-id="${o.id}">${ic('check')}Registrar cumplimiento</button><a class="btn sm" href="${esc(gcalUrl(o))}" target="_blank" rel="noopener">${ic('cal')}Google Calendar</a><button class="btn sm" data-act="ics" data-id="${o.id}">${ic('cal')}Otro calendario</button>`}<button class="ib edit-only" data-act="edit" data-c="obl" data-id="${o.id}" title="Editar">${ic('edit')}</button><button class="ib dan del-only" data-act="delObl" data-id="${o.id}" title="Eliminar">${ic('trash')}</button></div></div>`}
 
@@ -1142,7 +1148,7 @@ const ACT={
   $('#sheet').innerHTML=`<div class="sh"><h2>¿Qué vas a registrar?</h2><button class="ib" data-act="close">${ic('x')}</button></div><div class="sbd"><div class="qgrid">${g.map(m=>`<h4>${m.name}</h4>`+(m.id==='prestamos'?`<button class="btn" data-act="qq" data-k="prest">Prestar</button><button class="btn" data-act="qq" data-k="abono">Recibir abono</button>`:m.subs.map(s=>`<button class="btn" data-act="qq" data-m="${m.id}" data-s="${s.id}">${s.name}</button>`).join(''))).join('')}</div></div>`;$('#modal').hidden=false},
  qq:d=>{closeModal();if(d.k==='prest')return formPrest();if(d.k==='abono')return formAbono();const sub=subOf(d.m,d.s);go(d.m,d.s);
   if(sub.sp==='cortes')formCorte();else if(sub.sp==='rh')formRh();else if(sub.sp==='rs')formRs();else if(sub.sp==='rc')formRc();else if(!sub.sp||['veh','cab','eqv'].includes(sub.sp))formMov(d.m,d.s,{},{veh:L('veh')[0]?.id,cab:L('cab')[0]?.id})},
- pct:()=>{const p=S.cfg.pct;openForm({title:'Porcentajes del corte',preview:true,fields:[{k:'ter',l:'Dueño del terreno %',t:'dec',v:p.ter},{k:'emp',l:'Empleados directos %',t:'dec',v:p.emp},{k:'com',l:'Comisionista %',t:'dec',v:p.com},{k:'adm',l:'Administrador %',t:'dec',v:p.adm}],onInput:v=>{$('#prev').innerHTML=`Dueño de la mina: <b class="pos">${fg(100-v.ter-v.emp-v.com-v.adm)}%</b>`},save:v=>{if(v.ter+v.emp+v.com+v.adm>100)return 'La suma supera 100%';S.cfg.pct=v;S.cfg.confUpd=Date.now();queue('cfgx','conf');save();return 'Porcentajes guardados'}})},
+ pct:()=>{const p=S.cfg.pct;openForm({title:'Porcentajes del corte',preview:true,fields:[{k:'ter',l:'Dueño del terreno %',t:'dec',v:p.ter},{k:'emp',l:'Empleados directos %',t:'dec',v:p.emp},{k:'com',l:'Comisionista %',t:'dec',v:p.com},{k:'adm',l:'Administrador %',t:'dec',v:p.adm}],onInput:v=>{$('#prev').innerHTML=`Dueño de la mina: <b class="pos">${fg(100-v.ter-v.emp-v.com-v.adm)}%</b>`},save:v=>{if([v.ter,v.emp,v.com,v.adm].some(x=>x<0)||v.ter+v.emp+v.com+v.adm>100){toast('Los porcentajes deben ser positivos y sumar máximo 100%');return false}S.cfg.pct=v;S.cfg.confUpd=Date.now();queue('cfgx','conf');save();return 'Porcentajes guardados'}})},
  retroP:()=>{const P=S.retroP;openForm({title:'Parámetros de la retroexcavadora',fields:[{k:'maq',l:'Máquina',v:P.maq,req:1},{k:'dueno',l:'Dueño',v:P.dueno},{k:'precio',l:'Precio por hora',t:'money',v:P.precio,req:1},{k:'min',l:'Horas mínimas por día',t:'dec',v:P.min},{k:'alerta',l:'% alerta amarilla',t:'dec',v:P.alerta},{k:'pctComb',l:'% del combustible que asume el dueño',t:'dec',v:P.pctComb,hint:'0% = la mina asume el 100%.'}],save:v=>{Object.assign(S.retroP,v);S.retroP.upd=Date.now();queue('cfgx','retroP');save();return 'Parámetros guardados'}})},
  retroCorte:()=>{const {f}=retroPeriodo();const R=retroCalc(f,'');openForm({title:'Cerrar liquidación del dueño',preview:true,fields:[{k:'fecha',l:'Fecha de corte',t:'date',v:today(),req:1},{k:'obs',l:'Observaciones',t:'area',w:1,ph:'Ej. pagado en efectivo'}],onInput:()=>{$('#prev').innerHTML=`<div class="kv"><span>Horas</span><span>${fg(R.horas)}</span><span>Renta</span><span>${fmt(R.renta)}</span><span>Repuestos del dueño</span><span>${fmt(-R.repD)}</span><span><b>Neto a pagar</b></span><span class="gold"><b>${fmt(R.neto)}</b></span></div>`},save:v=>{upsert('rcort',v);return 'Liquidación cerrada'}})},
  rango:d=>{const [a,b]=rangoDe(d.v);V.f.rf=a;V.f.rt=b;V.f.rk=d.v;V.f.custom=0;render()},
@@ -1158,15 +1164,18 @@ const ACT={
  savePres:()=>{S.cfg.presMina=+($('#presM').value.replace(/\D/g,''))||0;S.cfg.confUpd=Date.now();queue('cfgx','conf');save();toast('Presupuesto guardado')},
  backup:()=>{const b=new Blob([JSON.stringify(S)],{type:'application/json'});dl(b,'respaldo-tablero-'+today()+'.json')},
  install:async()=>{if(!INSTALL)return;INSTALL.prompt();try{await INSTALL.userChoice}catch(e){}INSTALL=null;render()},
- reset:()=>confirmBox('¿Restablecer todos los datos?','Se borran los registros de este equipo y se cargan de nuevo los datos importados del Sheet.',async()=>{S=seed();migrate();await DB.put('kv','state',S);render();toast('Datos restablecidos')})
+ reset:()=>{const con=S.cfg.url&&S.cfg.token;confirmBox('¿Restablecer los datos de este equipo?',con?'Se borran los datos guardados en este equipo y se descargan de nuevo desde el Sheet. Los cambios sin sincronizar se pierden.':'Se borran los registros de este equipo y se cargan de nuevo los datos iniciales.',async()=>{
+  if(con){const keep=Object.assign({},S.cfg);S={outbox:[],lastSync:0,retroP:Object.assign({},S.retroP,{upd:0}),cfg:keep};COLLS.forEach(c=>S[c]=[]);S.v=3;S.cfg.pushedAll=S.cfg.url;S.cfg.confUpd=0;migrate();await DB.put('kv','state',S);render();sync(true);return}
+  S=seed();COLLS.forEach(c=>(S[c]||[]).forEach(r=>{r.upd=1}));migrate();S.outbox=[];await DB.put('kv','state',S);render();toast('Datos restablecidos')})}
 };
 function confirmBox(t,msg,fn){const fb=FICHA;FORM=fb?{fields:[],back:()=>openFicha(fb.c,fb.id)}:null;FICHA=null;$('#sheet').classList.remove('wide');$('#sheet').innerHTML=`<div class="sh"><h2>${esc(t)}</h2></div><div class="sbd"><p style="margin:0">${esc(msg)}</p></div><div class="sft"><button class="btn gh" data-act="close">Cancelar</button><button class="btn pri" id="okc">Confirmar</button></div>`;$('#modal').hidden=false;$('#okc').onclick=()=>{FORM=null;closeModal();fn()}}
-function toast(m){const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(t._t);t._t=setTimeout(()=>t.hidden=true,2600)}
+function toast(m){const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(t._t);t._t=setTimeout(()=>t.hidden=true,Math.min(9000,2400+String(m).length*45))}
 function copyText(s){const done=()=>toast('Copiado');try{navigator.clipboard.writeText(s).then(done,()=>fallbackCopy(s))}catch(e){fallbackCopy(s)}}
 function fallbackCopy(s){$('#sheet').innerHTML=`<div class="sh"><h2>Copia el texto</h2><button class="ib" data-act="close">${ic('x')}</button></div><div class="sbd"><div class="fld"><textarea id="cpy" style="min-height:240px">${esc(s)}</textarea></div></div>`;$('#modal').hidden=false;const a=$('#cpy');a.focus();a.select()}
 let DLNS;const dlNs=()=>DLNS??=(window.claude?.use?window.claude.use('downloads').catch(()=>null):Promise.resolve(null));
 async function dl(blob,name){const ns=await dlNs();
  if(ns){try{await ns.save({filename:name,data:blob});toast('Archivo guardado: '+name)}catch(e){toast(e?.code==='declined'?'Descarga cancelada':e?.code==='rejected_extension'?'El archivo de calendario se descarga desde la app instalada. Aquí usa “Google Calendar”.':'No se pudo guardar el archivo en esta vista')}return}
+ try{const file=new File([blob],name,{type:blob.type});if(/Android|iPhone|iPad/i.test(navigator.userAgent)&&navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:name});return}}catch(e){if(e&&e.name==='AbortError')return}
  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500);toast('Descargando '+name)}
 
 /* ---------- informes: texto, Excel, PDF ---------- */
@@ -1181,7 +1190,7 @@ async function exportXlsx(){
  const res=[['Informe financiero',`${fd(f)} - ${fd(t)}`],[],['Proyecto','Ingresos','Gastos','Costos','Inversiones','Resultado']].concat(R.rows.map(r=>[r.name,r.ing,r.gas,r.cos,r.inv,r.util]),[['Consolidado',R.T.ing,R.T.gas,R.T.cos,R.T.inv,R.T.util],[],['Préstamos: prestado',R.pr.col],['Préstamos: recuperado',R.pr.rec],['Préstamos: saldo por cobrar',R.pr.saldo]]);
  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(res),'Resumen');
  const inmN=id=>byId('inm',id)?.nombre||'';
- XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(R.M.slice().sort((a,b)=>a.fecha.localeCompare(b.fecha)).map(r=>({Fecha:fd(r.fecha),Proyecto:r.p==='inm'?inmN(r.inm):PNAME[r.p],Rubro:subOf(r.p,r.s)?.name||r.s,Clasificación:r.nat,Categoría:r.cat,Concepto:r.concepto,'Inmueble arrendado':r.arrTipo?(r.arrTipo+(r.arrDesc?' · '+r.arrDesc:'')):'','Proveedor/beneficiario':r.tercero,Cédula:r.cedula||'',Valor:r.valor,'Forma de pago':r.pago,Responsable:r.resp||'',Soporte:r.fotoN||''}))),'Movimientos');
+ XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(R.M.slice().sort((a,b)=>a.fecha.localeCompare(b.fecha)).map(r=>({Fecha:fd(r.fecha),Proyecto:r.p==='inm'?inmN(r.inm):PNAME[r.p],Rubro:subOf(r.p,r.s)?.name||r.s,Clasificación:({gasto:'Gasto',costo:'Costo',inversion:'Inversión',anticipo:'Anticipo'})[r.nat]||r.nat,Categoría:r.cat,Concepto:r.concepto,'Inmueble arrendado':r.arrTipo?(r.arrTipo+(r.arrDesc?' · '+r.arrDesc:'')):'','Proveedor/beneficiario':r.tercero,Cédula:r.cedula||'',Valor:r.valor,'Forma de pago':r.pago,Responsable:r.resp||'',Soporte:r.fotoN||''}))),'Movimientos');
  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(L('prest').map(p=>({Fecha:fd(p.fecha),Nombre:p.nombre,Cédula:p.cedula,Valor:p.valor,Abonos:p.valor-saldoPrest(p),Saldo:saldoPrest(p),Nota:p.nota||''}))),'Préstamos');
  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(L('cortes').flatMap(c=>c.liq.map(l=>({Corte:fd(c.fecha),Gramos_corte:c.gramos,Precio_g:c.precio,Beneficiario:l.label,Nombre:l.nombre,Porcentaje:l.pct,Gramos:l.g,Valor:l.cop,Anticipos_desc:l.desc,Neto:l.neto})))),'Cortes oro');
  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(L('rh').map(r=>({Fecha:fd(r.fecha),Inicio:r.hi,Final:r.hf,Horas:r.horas,Valor:r.horas*S.retroP.precio,Operador:r.operador,Novedad:r.obs}))),'Retro horas');
@@ -1296,7 +1305,7 @@ function stackSvg(ys,pal=PAL_D){
  const mx=Math.max(1,...ys.map(m=>Math.max(sum(m.proj,p=>p.egr),m.ing)))*1.08;const bw=(W-pl-8)/12;const y=v=>pt+(H-pt-pb)*(1-v/mx);
  let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Egresos por proyecto e ingresos por mes" xmlns="http://www.w3.org/2000/svg" font-family="Helvetica,Arial,sans-serif">`;
  for(let i=0;i<=4;i++){const v=mx/4*i;s+=`<line x1="${pl}" x2="${W-6}" y1="${y(v)}" y2="${y(v)}" stroke="${pal.grid}"/><text x="${pl-8}" y="${y(v)+4}" text-anchor="end" font-size="11" fill="${pal.txt}">${fmtK(v)}</text>`}
- ys.forEach((m,i)=>{let acc=0;const x=pl+i*bw+bw*.2,w=bw*.6;ids.forEach(id=>{const p=m.proj.find(q=>q.id===id);const v=p?p.egr:0;if(!v)return;s+=`<rect x="${x}" y="${y(acc+v)}" width="${w}" height="${Math.max(0,y(acc)-y(acc+v))}" fill="${pcol(id)}" fill-opacity=".9"><title>${m.lab} · ${p.name}: ${fmt(v)}</title></rect>`;acc+=v});
+ ys.forEach((m,i)=>{let acc=0;const x=pl+i*bw+bw*.2,w=bw*.6;ids.forEach(id=>{const p=m.proj.find(q=>q.id===id);const v=p?p.egr:0;if(!v)return;s+=`<rect x="${x}" y="${y(acc+v)}" width="${w}" height="${Math.max(0,y(acc)-y(acc+v))}" fill="${pcol(id)}" fill-opacity=".9"><title>${m.lab} · ${esc(p.name)}: ${fmt(v)}</title></rect>`;acc+=v});
   s+=`<text x="${x+w/2}" y="${H-9}" text-anchor="middle" font-size="11" fill="${pal.txt}">${m.lab}</text>`});
  const pts=ys.map((m,i)=>[pl+i*bw+bw/2,y(m.ing)]);
  s+=`<path d="${pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ')}" fill="none" stroke="${pal===PAL_D?'#e9edff':'#0e1540'}" stroke-width="2.2"/>`;
@@ -1400,7 +1409,9 @@ async function exportPdf(){
 /* ---------- sincronización (Apps Script) ---------- */
 const COLLS=['mov','prest','abonos','cab','veh','inm','per','cortes','rh','rs','rc','rcort','cats','eq','obl'];
 function migrate(){
- COLLS.forEach(c=>{if(!Array.isArray(S[c]))S[c]=[]});if(!S.outbox)S.outbox=[];
+ COLLS.forEach(c=>{if(!Array.isArray(S[c]))S[c]=[]});if(!Array.isArray(S.outbox))S.outbox=[];
+ S.cfg=Object.assign({role:'admin',pin:'',url:'',token:'',device:uid(),sheetUrl:'https://docs.google.com/spreadsheets/d/1ggJdlmDgeIXk0o0W41a9pRzUtoiHNmZOvs5IT0KSpTk/edit',pct:{ter:20,emp:8,com:2,adm:3},presMina:0},S.cfg||{});
+ S.retroP=Object.assign({maq:'Retroexcavadora',dueno:'',precio:0,min:7,alerta:80,pctComb:0},S.retroP||{});
  if((S.v||1)<2){
   L('veh').forEach(v=>[['soat','SOAT'],['tr','Seguro todo riesgo'],['tecno','Revisión técnico-mecánica']].forEach(([k,tp])=>{if(v[k]&&!L('obl').some(o=>o.aid===v.id&&o.tipo===tp))upsert('obl',{ac:'veh',aid:v.id,tipo:tp,fecha:v[k],meses:12,nota:'',hist:[],done:false})}));
   L('mov').filter(r=>r.p==='mina'&&r.s==='activos'&&!r.eq).forEach(r=>{const e=upsert('eq',{nombre:r.concepto,tipo:r.cat,marca:'',serie:'',fcompra:r.fecha,valor:r.valor,prov:r.tercero||''});r.eq=e.id;queue('mov',r.id)});
@@ -1433,6 +1444,8 @@ function mergeIn(x){
  if(x.c==='cfgx'){const r=x.rec;if(r.id==='retroP'&&(r.upd||0)>(S.retroP.upd||0)){const o=Object.assign({},r);delete o.id;delete o.del;Object.assign(S.retroP,o)}
   if(r.id==='conf'&&(r.upd||0)>(S.cfg.confUpd||0)){if(r.pct)S.cfg.pct=r.pct;if(r.presMina!=null)S.cfg.presMina=r.presMina;S.cfg.confUpd=r.upd}return}
  if(!COLLS.includes(x.c)||!x.rec||!x.rec.id)return;
+ const okId=v=>v==null||v===''||/^[\w.:-]{1,80}$/.test(String(v));
+ if(!okId(x.rec.id)||!['foto','fotoDrive','per','veh','cab','eq','inm','prest','aid'].every(k=>okId(x.rec[k])))return;
  const cur=byId(x.c,x.rec.id);
  if(!cur){S[x.c].push(x.rec);return}
  if((x.rec.upd||0)>(cur.upd||0)){if(S.outbox.some(o=>o.c===x.c&&o.id===cur.id)&&(cur.upd||0)>(x.rec.upd||0))return;Object.keys(cur).forEach(k=>delete cur[k]);Object.assign(cur,x.rec);S.outbox=S.outbox.filter(o=>!(o.c===x.c&&o.id===cur.id))}
@@ -1450,7 +1463,7 @@ async function uploadPhotos(){
 const FETCHING={};
 async function fetchDrive(fid,drive){
  if(!drive||!S.cfg.url||!navigator.onLine||FETCHING[drive])return null;FETCHING[drive]=1;
- try{const j=await api('getFile',{fileId:drive});const rec={name:j.name,data:j.data};await DB.put('files',fid,rec);IMG[fid]=rec;return rec}catch(e){return null}
+ try{const j=await api('getFile',{fileId:drive});const rec={name:j.name,data:j.data};await DB.put('files',fid,rec);IMG[fid]=rec;return rec}catch(e){delete FETCHING[drive];return null}
 }
 let SYNCING=false,SYNC_T=0;
 function scheduleSync(ms=15000){clearTimeout(SYNC_T);if(S.cfg.url&&S.cfg.token)SYNC_T=setTimeout(()=>sync(false),ms)}
@@ -1467,19 +1480,22 @@ async function sync(manual){
    const changes=items.map(toChange).filter(Boolean);
    const j=await api('sync',{since:S.cfg.pushedAll===S.cfg.url||!canPush()?(S.lastSync||0):0,changes});
    applyScope(j);
-   S.outbox=S.outbox.filter(o=>!items.some(s=>s.c===o.c&&s.id===o.id&&s.t>=o.t));
+   S.outbox=canPush()?S.outbox.filter(o=>!items.some(s=>s.c===o.c&&s.id===o.id&&s.t>=o.t)):[];
    (j.changes||[]).forEach(mergeIn);got+=(j.changes||[]).length;sent+=j.accepted||0;
    if(full)S.cfg.pushedAll=S.cfg.url;
    S.lastSync=j.serverTime||Date.now();S.cfg.syncErr='';save();
    const up=await uploadPhotos();
    if(!up&&!S.outbox.length)break;
   }
-  if(canPush()&&(got||sent||Date.now()-(S.cfg.lastReport||0)>3600e3)){try{await api('report',{data:buildReport()});S.cfg.lastReport=Date.now()}catch(e){}}
+  const since=Date.now()-(S.cfg.lastReport||0);
+  if(canPush()&&(((got||sent)&&since>600000)||since>3600e3||(manual&&(got||sent)))){try{await api('report',{data:buildReport()});S.cfg.lastReport=Date.now()}catch(e){}}
   save();if(manual)toast(got||sent?`Sincronizado: ${sent} enviados, ${got} recibidos`:'Todo al día con Drive');
  }catch(e){S.cfg.syncErr=e.message||'Error';save();if(manual)toast(S.cfg.syncErr)}
  SYNCING=false;render();
 }
-setInterval(()=>{if(S&&navigator.onLine&&S.cfg.url&&S.cfg.token)sync(false)},300000);
+setInterval(()=>{if(S&&document.visibilityState==='visible'&&navigator.onLine&&S.cfg.url&&S.cfg.token)sync(false)},600000);
+document.addEventListener('visibilitychange',()=>{if(!S)return;if(document.hidden){clearTimeout(saveT);DB.put('kv','state',S)}else if(navigator.onLine&&S.cfg.url&&S.cfg.token&&Date.now()-(S.lastSync||0)>120000)sync(false)});
+window.addEventListener('pagehide',()=>{if(S){clearTimeout(saveT);DB.put('kv','state',S)}});
 
 /* ---------- eventos ---------- */
 document.addEventListener('click',e=>{
@@ -1493,8 +1509,8 @@ document.addEventListener('change',e=>{
  if(k==='rf'||k==='rt'){if(e.target.value){V.f[k]=e.target.value;V.f.custom=1;render()}}
  if(k==='role'){const nv=e.target.value;const need=S.cfg.pin&&((nv==='admin'&&S.cfg.role!=='admin')||(nv==='aux'&&!['admin','aux'].includes(S.cfg.role)));
   const apply=()=>{S.cfg.role=nv;save();if(nv==='dueno')go('retro','dueno');else render();toast('Perfil: '+ROLES[nv])};
-  if(need){openForm({title:'Ingresa el PIN',fields:[{k:'pin',l:'PIN',t:'password',req:1}],save:v=>{if(v.pin!==S.cfg.pin){setTimeout(render,0);return 'PIN incorrecto'}apply();return 'Acceso concedido'}})}else apply()}
- if(e.target.id==='heroPh'&&e.target.files[0]){const {c,id}=e.target.dataset;const fl=e.target.files[0];compress(fl).then(async data=>{const fid=uid();const rec={name:fl.name,data};await DB.put('files',fid,rec);IMG[fid]=rec;upsert(c,{id,foto:fid});render();openFicha(c,id);toast('Foto actualizada')}).catch(()=>toast('No se pudo leer la foto'))}
+  if(need){e.target.value=S.cfg.role;openForm({title:'Ingresa el PIN',fields:[{k:'pin',l:'PIN',t:'password',req:1}],save:v=>{if(v.pin!==S.cfg.pin){toast('PIN incorrecto');return false}apply();return 'Acceso concedido'}})}else apply()}
+ if(e.target.id==='heroPh'&&e.target.files[0]){const {c,id}=e.target.dataset;const fl=e.target.files[0];compress(fl).then(async data=>{const fid=uid();const rec={name:fl.name,data};await DB.put('files',fid,rec);IMG[fid]=rec;upsert(c,{id,foto:fid,fotoDrive:'',fotoUrl:''});render();openFicha(c,id);toast('Foto actualizada')}).catch(()=>toast('No se pudo leer la foto'))}
  if(e.target.id==='restore'&&e.target.files[0]){const fr=new FileReader();fr.onload=async()=>{try{const d=JSON.parse(fr.result);if(!d.mov)throw 0;S=d;migrate();await DB.put('kv','state',S);render();toast('Respaldo restaurado')}catch(_){toast('El archivo no es un respaldo válido')}};fr.readAsText(e.target.files[0])}
 });
 document.addEventListener('input',e=>{if(e.target.matches('.view [data-money]'))moneyMask(e.target)});
@@ -1519,6 +1535,7 @@ if('serviceWorker' in navigator&&document.querySelector('link[rel=manifest]')&&(
  let st=null;try{st=await DB.get('kv','state')}catch(e){}
  S=st&&st.mov?st:seed();
  migrate();
+ if(!DB.db)setTimeout(()=>toast('Este navegador no permite guardar datos: lo que registres se perderá al cerrar. Usa la app instalada o un navegador normal.'),1200);
  if(!st)DB.put('kv','state',S);
  const h=(location.hash||'').slice(1).split('.');
  if(h[0]&&modOf(h[0]))go(h[0],h[1]);else render();
