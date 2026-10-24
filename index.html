@@ -241,6 +241,10 @@ table.pyg tr.nota td{color:var(--mut);font-style:italic}
 .hb{display:grid;gap:5px;margin-bottom:12px;font-size:13.5px}
 .hb span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media (max-width:640px){.donut{grid-template-columns:minmax(0,1fr)}.donut svg{margin:0 auto}}
+.pk{width:26px;height:26px;border-radius:7px;border:1.5px solid var(--line2);background:transparent;display:grid;place-items:center;padding:0;color:transparent}
+.pk svg{width:16px;height:16px;stroke:currentColor}
+.pk.on{background:var(--cyan);border-color:var(--cyan);color:#05202a}
+.t tr.picked td{background:#2ee6f00f}
 .ro .edit-only{display:none!important}
 .nodel .del-only{display:none!important}
 @media (max-width:1100px){.two{grid-template-columns:minmax(0,1fr)}}
@@ -343,6 +347,8 @@ const IC={
  shoe:'<path d="M6 3v8a6 6 0 0 0 12 0V3"/><path d="M4 3h4M16 3h4M6 8h.01M18 8h.01M7.5 13.5h.01M16.5 13.5h.01"/>',
  cal:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
  check:'<path d="M5 12l5 5L20 7"/>',
+ move:'<path d="M4 8h13l-3-3M20 16H7l3 3"/>',
+ list:'<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
  tool:'<path d="M14.7 6.3a4 4 0 0 0 5 5L21 13l-8 8-3-3 8-8-1.3-1.3a4 4 0 0 0-5-5L14 2z"/><path d="M3 21l6-6"/>'
 };
 const ic=(n,cls='')=>`<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${IC[n]}</svg>`;
@@ -387,6 +393,7 @@ const MOD=[
   {id:'nomina',name:'Nómina',sp:'nomM'},
   {id:'otros',name:'Otros costos',nat:'costo',cats:['Campamento','Dotación','Transporte','Seguridad','Servicios ambientales','Mano de obra','Otro']}
  ]},
+ {id:'movs',name:'Revisar movimientos',ic:'list'},
  {id:'informes',name:'Informes',ic:'chart'},
  {id:'ajustes',name:'Ajustes',ic:'gear'}
 ];
@@ -584,7 +591,7 @@ function go(m,s){
  const mod=modOf(m);if(mod?.subs&&!s)s=mod.subs[0].id;
  if(S.cfg.role==='dueno'){m='retro';s='dueno'}
  if(S.cfg.role==='conta'&&m==='ajustes'){}
- V.m=m;V.s=s||null;V.q='';OPEN[m]=true;
+ V.m=m;V.s=s||null;V.q='';OPEN[m]=true;V.sel=false;PICK.clear();
  try{history.replaceState(null,'','#'+m+(s?'.'+s:''))}catch(e){}
  closeSide();render();window.scrollTo(0,0);
 }
@@ -602,6 +609,7 @@ function render(){
  if(V.m==='inicio')h=vInicio();
  else if(V.m==='prestamos')h=vPrest();
  else if(V.m==='informes')h=vInformes();
+ else if(V.m==='movs')h=vMovs();
  else if(V.m==='ajustes')h=vAjustes();
  else if(sub?.sp)h=SPV[sub.sp]();
  else h=vGen(V.m,sub);
@@ -627,21 +635,23 @@ const thisMonth=()=>today().slice(0,7);
 function rowActs(c,id,extra=''){
  return `<td class="acts">${extra}<button class="ib edit-only" data-act="edit" data-c="${c}" data-id="${id}" title="Editar">${ic('edit')}</button><button class="ib dan del-only" data-act="del" data-c="${c}" data-id="${id}" title="Eliminar">${ic('trash')}</button></td>`}
 const photoBtn=r=>r.foto?`<button class="ib" data-act="foto" data-id="${r.foto}"${r.fotoDrive?` data-drive="${r.fotoDrive}"`:''} title="Ver soporte">${ic('cam')}</button>`:(r.fotoN?`<span class="tag" title="Soporte en Drive">${esc(r.fotoN.length>18?r.fotoN.slice(0,16)+'…':r.fotoN)}</span>`:'');
+const PICK=new Set();
+const trasBtn=r=>r.s==='nomina'?'':`<button class="ib edit-only" data-act="tras" data-id="${r.id}" title="Trasladar a otro proyecto o categoría">${ic('move')}</button>`;
 function movTable(rows,opt={}){
- const q=V.q.toLowerCase();
+ const q=V.q.toLowerCase();const sel=V.sel&&!opt.noActs&&canEdit();const full=opt.full;
  if(q)rows=rows.filter(r=>[r.concepto,r.tercero,r.cat,r.cedula,r.resp].join(' ').toLowerCase().includes(q));
  rows=rows.slice().sort((a,b)=>b.fecha.localeCompare(a.fecha)||b.cre-a.cre);
  if(!rows.length)return `<div class="empty">${q?'Sin resultados para la búsqueda.':'Aún no hay registros aquí. Usa “Registrar” para agregar el primero.'}</div>`;
  const showP=opt.showP;
- return `<div class="tw"><table class="t cards"><thead><tr><th>Fecha</th>${showP?'<th>Proyecto</th>':''}<th>Concepto</th>${showP?'':'<th>Categoría</th>'}<th>${opt.tl||'Proveedor / beneficiario'}</th><th>Tipo</th><th class="n">Valor</th><th></th></tr></thead><tbody>
- ${rows.map(r=>`<tr class="rw"><td data-l="Fecha" class="num">${fd(r.fecha)}</td>${showP?`<td data-l="Proyecto">${esc(PNAME[r.p]||r.p)}</td>`:''}<td class="p">${esc(r.concepto||'—')}${r.arrTipo?`<div style="margin-top:3px"><span class="tag">${esc(r.arrTipo)}${r.arrDesc?' · '+esc(r.arrDesc):''}${r.arrMes?' · '+MES[+r.arrMes.slice(5)-1]+' '+r.arrMes.slice(0,4):''}</span></div>`:''}${r.nota?`<div class="mut" style="font-size:12px;font-weight:400">${esc(r.nota)}</div>`:''}</td>${showP?'':`<td data-l="Cat.">${esc(r.cat||'')}</td>`}<td data-l="Tercero">${esc(r.tercero||'')}${r.cedula?` <span class="mut num">CC ${esc(r.cedula)}</span>`:''}</td><td>${tagN(r.nat)}</td><td class="n">${fmt(r.valor)}</td>${opt.noActs?'<td></td>':rowActs('mov',r.id,photoBtn(r))}</tr>`).join('')}
- </tbody><tfoot><tr><td colspan="5">${rows.length} registro${rows.length===1?'':'s'}</td><td class="n">${fmt(sum(rows))}</td><td></td></tr></tfoot></table></div>`;
+ return `<div class="tw"><table class="t cards"><thead><tr>${sel?`<th><button class="ib" data-act="pickAll" data-ids="${rows.filter(r=>r.s!=='nomina').map(r=>r.id).join(',')}" title="Seleccionar todos">${ic('check')}</button></th>`:''}<th>Fecha</th>${showP||full?'<th>Proyecto</th>':''}${full?'<th>Rubro</th>':''}<th>Concepto</th>${showP&&!full?'':'<th>Categoría</th>'}<th>${opt.tl||'Proveedor / beneficiario'}</th><th>Tipo</th><th class="n">Valor</th><th></th></tr></thead><tbody>
+ ${rows.map(r=>`<tr class="rw${PICK.has(r.id)?' picked':''}">${sel?`<td>${r.s==='nomina'?'':`<button class="pk ${PICK.has(r.id)?'on':''}" data-act="pick" data-id="${r.id}" aria-label="Seleccionar">${ic('check')}</button>`}</td>`:''}<td data-l="Fecha" class="num">${fd(r.fecha)}</td>${showP||full?`<td data-l="Proyecto">${esc(r.p==='inm'?(byId('inm',r.inm)?.nombre||'Inmuebles'):PNAME[r.p]||r.p)}</td>`:''}${full?`<td data-l="Rubro">${esc(subOf(r.p,r.s)?.name||r.s)}</td>`:''}<td class="p">${esc(r.concepto||'—')}${r.arrTipo?`<div style="margin-top:3px"><span class="tag">${esc(r.arrTipo)}${r.arrDesc?' · '+esc(r.arrDesc):''}${r.arrMes?' · '+MES[+r.arrMes.slice(5)-1]+' '+r.arrMes.slice(0,4):''}</span></div>`:''}${r.nota?`<div class="mut" style="font-size:12px;font-weight:400">${esc(r.nota)}</div>`:''}</td>${showP&&!full?'':`<td data-l="Cat.">${esc(r.cat||'')}</td>`}<td data-l="Tercero">${esc(r.tercero||'')}${r.cedula?` <span class="mut num">CC ${esc(r.cedula)}</span>`:''}</td><td>${tagN(r.nat)}</td><td class="n">${fmt(r.valor)}</td>${opt.noActs?'<td></td>':rowActs('mov',r.id,photoBtn(r)+trasBtn(r))}</tr>`).join('')}
+ </tbody><tfoot><tr><td colspan="${5+(sel?1:0)+(full?1:0)+(full&&!showP?1:0)}">${rows.length} registro${rows.length===1?'':'s'}</td><td class="n">${fmt(sum(rows))}</td><td></td></tr></tfoot></table></div>`;
 }
 function catChips(cats,key){
  const cur=V.f[key]||'';const [m,sb]=key.split('.');const cus=customCats(m,sb).map(c=>c.name);
  return `<div class="chips"><button class="chip ${!cur?'on':''}" data-act="fcat" data-k="${key}" data-v="">Todas</button>${cats.map(c=>`<button class="chip ${cur===c?'on':''}" data-act="fcat" data-k="${key}" data-v="${esc(c)}"${cus.includes(c)?' title="Categoría personalizada"':''}>${esc(c)}${cus.includes(c)?' ·':''}</button>`).join('')}<button class="chip edit-only" data-act="newCat" data-m="${m}" data-s="${sb}">+ Categoría</button></div>`;
 }
-function toolbar(btns){return `<div class="bar">${btns}<input class="search" id="q" placeholder="Buscar concepto, nombre o cédula" aria-label="Buscar"></div>`}
+function toolbar(btns,mov=true){return `<div class="bar">${btns}${mov?`<button class="btn gh edit-only" data-act="selMode">${ic('check')}${V.sel?'Cancelar selección':'Seleccionar'}</button>${V.sel&&PICK.size?`<button class="btn pri edit-only" data-act="trasSel">${ic('move')}Trasladar ${PICK.size}</button>`:''}`:''}<input class="search" id="q" placeholder="Buscar concepto, nombre o cédula" aria-label="Buscar"></div>`}
 
 /* ---------- vista genérica de un rubro ---------- */
 function inmSel(){
@@ -774,7 +784,7 @@ SPV.rdue=()=>{
 };
 SPV.rh=()=>{
  const P=S.retroP;let rows=L('rh').slice().sort((a,b)=>b.fecha.localeCompare(a.fecha));
- return `<div class="card">${toolbar(`<button class="btn pri edit-only" data-act="newRh">${ic('plus')}Registrar día</button>`)}<div style="height:10px"></div>
+ return `<div class="card">${toolbar(`<button class="btn pri edit-only" data-act="newRh">${ic('plus')}Registrar día</button>`,false)}<div style="height:10px"></div>
  <div class="tw"><table class="t cards"><thead><tr><th>Fecha</th><th class="n">Horómetro inicio</th><th class="n">Horómetro final</th><th class="n">Horas</th><th class="n">Valor día</th><th>Operador</th><th>Novedad</th><th></th></tr></thead><tbody>
  ${rows.filter(r=>!V.q||[r.obs,r.operador].join(' ').toLowerCase().includes(V.q.toLowerCase())).map(r=>`<tr class="rw"><td class="p num">${fd(r.fecha)}</td><td data-l="Inicio" class="n">${fg(r.hi)}</td><td data-l="Final" class="n">${fg(r.hf)}</td><td class="n ${r.horas>0&&r.horas<P.min?'neg':''}">${fg(r.horas)} h</td><td data-l="Valor" class="n">${fmt(r.horas*P.precio)}</td><td data-l="Operador">${esc(r.operador||'')}</td><td data-l="Novedad">${esc(r.obs||'')}</td>${rowActs('rh',r.id,photoBtn(r))}</tr>`).join('')}
  </tbody><tfoot><tr><td colspan="3">${rows.length} días</td><td class="n">${fg(sum(rows,r=>r.horas))} h</td><td class="n">${fmt(sum(rows,r=>r.horas)*P.precio)}</td><td colspan="3"></td></tr></tfoot></table></div></div>`;
@@ -782,14 +792,14 @@ SPV.rh=()=>{
 SPV.rs=()=>{
  const rows=L('rs').slice().sort((a,b)=>b.fecha.localeCompare(a.fecha)).filter(r=>!V.q||r.concepto.toLowerCase().includes(V.q.toLowerCase()));
  return `<div class="grid k4">${kpi('Asume el dueño',fmt(sum(rows.filter(r=>r.asume!=='Mina'))),'Se descuenta de la renta','c-wa')}${kpi('Asume la mina',fmt(sum(rows.filter(r=>r.asume==='Mina'))),'Costo de la mina','c-ba')}</div>
- <div class="card">${toolbar(`<button class="btn pri edit-only" data-act="newRs">${ic('plus')}Registrar salida</button>`)}<div style="height:10px"></div><div class="tw"><table class="t cards"><thead><tr><th>Fecha</th><th>Tipo</th><th>Concepto</th><th>Asume</th><th class="n">Valor</th><th></th></tr></thead><tbody>
+ <div class="card">${toolbar(`<button class="btn pri edit-only" data-act="newRs">${ic('plus')}Registrar salida</button>`,false)}<div style="height:10px"></div><div class="tw"><table class="t cards"><thead><tr><th>Fecha</th><th>Tipo</th><th>Concepto</th><th>Asume</th><th class="n">Valor</th><th></th></tr></thead><tbody>
  ${rows.map(r=>`<tr class="rw"><td class="num" data-l="Fecha">${fd(r.fecha)}</td><td data-l="Tipo">${esc(r.tipo)}</td><td class="p">${esc(r.concepto)}</td><td data-l="Asume"><span class="tag ${r.asume==='Mina'?'ok':'wa'}">${esc(r.asume)}</span></td><td class="n">${fmt(r.valor)}</td>${rowActs('rs',r.id,photoBtn(r))}</tr>`).join('')}</tbody><tfoot><tr><td colspan="4">${rows.length} registros</td><td class="n">${fmt(sum(rows))}</td><td></td></tr></tfoot></table></div></div>`;
 };
 SPV.rc=()=>{
  const rows=L('rc').slice().sort((a,b)=>b.fecha.localeCompare(a.fecha));
  const gal=sum(rows.filter(r=>r.tipo==='ACPM'),r=>r.cant);
  return `<div class="grid k4">${kpi('Total combustible y aceites',fmt(sum(rows)),(100-(S.retroP.pctComb||0))+'% a cargo de la mina','c-vi')}${kpi('ACPM',fg(gal)+' gal',gal?fmt(sum(rows.filter(r=>r.tipo==='ACPM'))/gal)+' por galón':'','c-cy')}</div>
- <div class="card">${toolbar(`<button class="btn pri edit-only" data-act="newRc">${ic('plus')}Registrar tanqueo</button>`)}<div style="height:10px"></div><div class="tw"><table class="t cards"><thead><tr><th>Fecha</th><th>Tipo</th><th class="n">Cantidad</th><th class="n">Horómetro</th><th class="n">Valor</th><th></th></tr></thead><tbody>
+ <div class="card">${toolbar(`<button class="btn pri edit-only" data-act="newRc">${ic('plus')}Registrar tanqueo</button>`,false)}<div style="height:10px"></div><div class="tw"><table class="t cards"><thead><tr><th>Fecha</th><th>Tipo</th><th class="n">Cantidad</th><th class="n">Horómetro</th><th class="n">Valor</th><th></th></tr></thead><tbody>
  ${rows.map(r=>`<tr class="rw"><td class="num" data-l="Fecha">${fd(r.fecha)}</td><td class="p">${esc(r.tipo)}</td><td data-l="Cant." class="n">${fg(r.cant)} ${esc(r.und||'')}</td><td data-l="Horómetro" class="n">${r.horo?fg(r.horo):'—'}</td><td class="n">${fmt(r.valor)}</td>${rowActs('rc',r.id,photoBtn(r))}</tr>`).join('')}</tbody><tfoot><tr><td colspan="4">${rows.length} registros</td><td class="n">${fmt(sum(rows))}</td><td></td></tr></tfoot></table></div></div>`;
 };
 
@@ -1094,6 +1104,12 @@ const ACT={
  newPer:d=>formPer(d.sc),
  newVeh:()=>formVeh(),newCab:()=>formCab(),newEq:()=>formEq(),
  newCat:d=>formCat(d.m,d.s),
+ tras:d=>formTras([d.id]),
+ trasSel:()=>formTras([...PICK]),
+ selMode:()=>{V.sel=!V.sel;PICK.clear();render()},
+ pick:d=>{PICK.has(d.id)?PICK.delete(d.id):PICK.add(d.id);render()},
+ pickAll:d=>{const ids=(d.ids||'').split(',').filter(Boolean);const all=ids.every(i=>PICK.has(i));ids.forEach(i=>all?PICK.delete(i):PICK.add(i));render()},
+ mf:d=>{V.f[d.k]=d.v;if(d.k==='mp')V.f.ms='';render()},
  delCat:d=>{const c=byId('cats',d.id);confirmBox('¿Eliminar la categoría “'+c.name+'”?','Solo se puede eliminar porque no tiene registros.',()=>{remove('cats',d.id);render();toast('Categoría eliminada')})},
  ficha:d=>openFicha(d.c,d.id),
  newObl:d=>formObl(d.c,d.id),
@@ -1175,6 +1191,46 @@ async function exportXlsx(){
  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(L('obl').filter(o=>assetOf(o)&&!assetOf(o).del).map(o=>({Activo:ASSET[o.ac].name(assetOf(o)),Clase:ASSET[o.ac].t,Obligación:oblName(o),Vence:fd(o.fecha),'Cada (meses)':o.meses||'',Estado:o.done?'Cumplida':o.fecha<today()?'Vencida':'Vigente',Nota:o.nota||''}))),'Obligaciones');
  const out=XLSX.write(wb,{bookType:'xlsx',type:'array'});dl(new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),`informe-financiero-${f}-a-${t}.xlsx`);
 }
+/* ---------- revisar y trasladar movimientos ---------- */
+function vMovs(){
+ const fp=V.f.mp||'',fn=V.f.mn||'',fs=V.f.ms||'';
+ let rows=L('mov');const all=rows;
+ if(fp)rows=rows.filter(r=>(r.p==='inm'?'inm:'+r.inm:r.p)===fp);if(fn)rows=rows.filter(r=>r.nat===fn);if(fs)rows=rows.filter(r=>r.p+'.'+r.s===fs);
+ const projs=[['personal','Gastos personales'],['parcela','Parcela Las Colinas'],...L('inm').map(i=>['inm:'+i.id,i.nombre]),['mina','Mina La Fe']];
+ const subsOf=fp?MOD.filter(m=>m.id===fp.split(':')[0]).flatMap(m=>(m.subs||[]).filter(x=>x.cats||x.sp==='nom'||x.sp==='nomM').map(x=>[m.id+'.'+x.id,x.name])):[];
+ const sinCat=all.filter(r=>!r.cat||/^otros?$/i.test(r.cat));
+ return `<div class="card"><p class="note" style="margin:0 0 12px">Revisa cada registro. Con ${ic('move').replace('<svg','<svg style="width:15px;height:15px;vertical-align:-3px;stroke:var(--cyan)"')} lo llevas a otro proyecto, rubro o categoría; con “Seleccionar” trasladas varios a la vez. La nómina se ajusta desde su propio rubro.</p>
+ <div class="chips"><button class="chip ${!fp?'on':''}" data-act="mf" data-k="mp" data-v="">Todos los proyectos</button>${projs.map(([k,l])=>`<button class="chip ${fp===k?'on':''}" data-act="mf" data-k="mp" data-v="${k}">${esc(l)}</button>`).join('')}</div>
+ ${subsOf.length?`<div class="chips" style="margin-top:8px"><button class="chip ${!fs?'on':''}" data-act="mf" data-k="ms" data-v="">Todos los rubros</button>${subsOf.map(([k,l])=>`<button class="chip ${fs===k?'on':''}" data-act="mf" data-k="ms" data-v="${k}">${esc(l)}</button>`).join('')}</div>`:''}
+ <div class="chips" style="margin-top:8px">${[['','Toda clasificación'],['gasto','Gastos'],['costo','Costos'],['inversion','Inversiones'],['anticipo','Anticipos']].map(([k,l])=>`<button class="chip ${fn===k?'on':''}" data-act="mf" data-k="mn" data-v="${k}">${l}</button>`).join('')}<button class="chip ${V.f.mo?'on':''}" data-act="mf" data-k="mo" data-v="${V.f.mo?'':'1'}">Solo “Otros” o sin categoría (${sinCat.length})</button></div></div>
+ <div class="card">${toolbar('')}<div style="height:10px"></div>${movTable(V.f.mo?rows.filter(r=>!r.cat||/^otros?$/i.test(r.cat)):rows,{full:1})}</div>`;
+}
+const DEST=()=>MOD.flatMap(m=>(m.subs||[]).filter(x=>x.cats).map(x=>[m.id+'.'+x.id,m.name+' › '+x.name]));
+function formTras(ids){
+ const rs=ids.map(id=>byId('mov',id)).filter(r=>r&&r.s!=='nomina');if(!rs.length){toast('Selecciona al menos un registro');return}
+ const r0=rs[0];const multi=rs.length>1;const k0=DEST().some(d=>d[0]===r0.p+'.'+r0.s)?r0.p+'.'+r0.s:DEST()[0][0];
+ const catOpts=k=>{const c=catsOf(...k.split('.'));return multi?[['__keep','Mantener la categoría de cada registro'],...c.map(x=>[x,x])]:c.map(x=>[x,x])};
+ const fields=[{k:'dest',l:'Llevar a',t:'select',opts:DEST(),v:k0,req:1,w:1},
+  {k:'cat',l:'Categoría',t:'select',opts:catOpts(k0),v:multi?'__keep':(catsOf(...k0.split('.')).includes(r0.cat)?r0.cat:catsOf(...k0.split('.'))[0]),req:1,w:1},
+  {k:'inm',l:'Inmueble',t:'select',opts:L('inm').map(i=>[i.id,i.nombre]),v:r0.inm||V.inm||L('inm')[0]?.id,when:v=>v.dest.startsWith('inm.')},
+  {k:'veh',l:'Vehículo',t:'select',opts:L('veh').map(x=>[x.id,x.placa]),v:r0.veh||L('veh')[0]?.id,when:v=>v.dest==='personal.vehiculos'},
+  {k:'cab',l:'Caballo',t:'select',opts:L('cab').map(x=>[x.id,x.nombre]),v:r0.cab||L('cab')[0]?.id,when:v=>v.dest==='parcela.caballos'},
+  {k:'eq',l:'Equipo',t:'select',blank:'Sin vincular a un equipo',opts:L('eq').map(x=>[x.id,x.nombre]),v:r0.eq||'',when:v=>v.dest==='mina.activos'||v.dest==='mina.herramientas'}];
+ openForm({title:multi?`Trasladar ${rs.length} registros`:'Trasladar: '+(r0.concepto||''),fields,preview:true,ok:'Trasladar',
+  top:`<div class="note">${multi?`${rs.length} registros por ${fmt(sum(rs))}`:`${fd(r0.fecha)} · ${fmt(r0.valor)} · hoy en ${esc(PNAME[r0.p])} › ${esc(subOf(r0.p,r0.s)?.name||r0.s)} › ${esc(r0.cat||'sin categoría')}`}</div>`,
+  onInput:v=>{const sel=$('#f_cat');if(sel&&sel.dataset.k!==v.dest){const keep=sel.dataset.k?null:sel.value;sel.dataset.k=v.dest;const o=catOpts(v.dest);sel.innerHTML=o.map(([a,b])=>`<option value="${esc(a)}">${esc(b)}</option>`).join('');if(keep&&o.some(x=>x[0]===keep))sel.value=keep;v.cat=sel.value}
+   const [m,sb]=v.dest.split('.');const cl=catsOf(m,sb);
+   const res=rs.map(r=>{const c=v.cat==='__keep'?(cl.includes(r.cat)?r.cat:null):v.cat;return {r,c}});const miss=res.filter(x=>!x.c).length;
+   const nats={};res.forEach(x=>{const n=natFor(m,sb,x.c||cl[cl.length-1]);nats[n]=(nats[n]||0)+x.r.valor});
+   $('#prev').innerHTML=`Quedará como ${Object.entries(nats).map(([n,val])=>`${tagN(n)} ${multi?fmt(val):''}`).join(' ')} <span class="mut">${NATH[Object.keys(nats)[0]]}</span>${miss?`<div class="gold" style="margin-top:8px">${miss} registro${miss>1?'s':''} no tiene${miss>1?'n':''} su categoría en el destino y quedará${miss>1?'n':''} en “${esc(cl[cl.length-1])}”.</div>`:''}`},
+  save:v=>{const [m,sb]=v.dest.split('.');const cl=catsOf(m,sb);let n=0;
+   rs.forEach(r=>{const c=v.cat==='__keep'?(cl.includes(r.cat)?r.cat:cl[cl.length-1]):v.cat;
+    const d={id:r.id,p:m,s:sb,cat:c,nat:natFor(m,sb,c),inm:m==='inm'?v.inm:'',veh:v.dest==='personal.vehiculos'?v.veh:'',cab:v.dest==='parcela.caballos'?v.cab:'',eq:(v.dest==='mina.activos'||v.dest==='mina.herramientas')?(v.eq||''):''};
+    if(!isArr({cat:c})){d.arrTipo='';d.arrDesc='';d.arrMes=''}
+    upsert('mov',d);n++});
+   PICK.clear();V.sel=false;return n>1?`${n} registros trasladados`:'Registro trasladado'}});
+}
+
 /* ---------- análisis: periodos, hallazgos, estado de resultados ---------- */
 const PCOL={personal:'#ff5c7c',parcela:'#24d6a5',inm:'#7b6dff',mina:'#f2c75c'};
 const pcol=id=>PCOL[String(id).split(':')[0]]||'#2ee6f0';
