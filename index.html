@@ -1436,8 +1436,8 @@ async function api(op,payload={}){
 const canPush=()=>['admin','aux'].includes(S.cfg.tokRole);
 function applyScope(j){if(!j.role)return;S.cfg.tokRole=j.role;S.cfg.scope=j.scope;S.cfg.scopeUrl=S.cfg.url;if(j.role!=='admin'&&S.cfg.role!==j.role){S.cfg.role=j.role;if(j.role==='dueno')V.m='retro',V.s='dueno'}}
 function toChange(o){
- if(o.c==='retroP'||(o.c==='cfgx'&&o.id==='retroP'))return {c:'cfgx',rec:Object.assign({},S.retroP,{id:'retroP',upd:S.retroP.upd||1})};
- if(o.c==='cfgx'&&o.id==='conf')return {c:'cfgx',rec:{id:'conf',pct:S.cfg.pct,presMina:S.cfg.presMina,upd:S.cfg.confUpd||1}};
+ if(o.c==='retroP'||(o.c==='cfgx'&&o.id==='retroP'))return S.retroP.upd>1?{c:'cfgx',rec:Object.assign({},S.retroP,{id:'retroP'})}:null;
+ if(o.c==='cfgx'&&o.id==='conf')return S.cfg.confUpd>1?{c:'cfgx',rec:{id:'conf',pct:S.cfg.pct,presMina:S.cfg.presMina,upd:S.cfg.confUpd}}:null;
  const rec=byId(o.c,o.id);return rec?{c:o.c,rec}:null}
 function allItems(){const t=Date.now();const a=[];COLLS.forEach(c=>(S[c]||[]).forEach(r=>{if(r.id)a.push({c,id:r.id,t})}));a.push({c:'cfgx',id:'retroP',t},{c:'cfgx',id:'conf',t});return a}
 function mergeIn(x){
