@@ -866,8 +866,8 @@ function vInicio(){
 function vAjustes(){
  const c=S.cfg;const pend=S.outbox.length;
  return `<div class="grid two"><div class="card"><h3>Perfil de este equipo</h3><div class="fg">
- <div class="fld w"><label for="role">Quién usa este dispositivo</label><select id="role" data-act-change="role" ${c.tokRole&&c.tokRole!=='admin'?'disabled':''}>${Object.entries(ROLES).map(([k,v])=>`<option value="${k}" ${c.role===k?'selected':''}>${v}</option>`).join('')}</select><div class="hint">Administrador: todo. Auxiliar: registra y edita, no borra. Contador: solo lectura e informes. Dueño de la máquina: solo su vista de la retroexcavadora.${c.tokRole&&c.tokRole!=='admin'?' En este equipo el perfil lo define la clave de acceso.':''}</div></div>
- <div class="fld w"><label for="pin">PIN de administrador</label><input id="pin" inputmode="numeric" maxlength="6" placeholder="Sin PIN" value="${esc(c.pin)}" ${S.cfg.role!=='admin'?'disabled':''}><div class="hint">Se pide al cambiar a Administrador o Auxiliar.</div></div>
+ <div class="fld w"><label for="role">Vista de este equipo</label><select id="role" data-act-change="role" ${c.tokRole&&c.tokRole!=='admin'?'disabled':''}>${Object.entries(ROLES).map(([k,v])=>`<option value="${k}" ${c.role===k?'selected':''}>${v}</option>`).join('')}</select><div class="hint">Administrador: todo. Auxiliar: registra y edita, no borra. Contador: solo lectura e informes. Dueño de la máquina: solo su vista de la retroexcavadora. Este selector solo cambia lo que ves aquí; a otras personas se les da acceso con su propia clave en su equipo.${c.tokRole&&c.tokRole!=='admin'?' En este equipo el perfil lo define la clave de acceso.':''}</div></div>
+ <div class="fld w"><label for="pin">PIN de administrador</label><input id="pin" type="password" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="${c.pin?'PIN guardado (escribe uno nuevo para cambiarlo)':'Sin PIN'}" value="" ${S.cfg.role!=='admin'?'disabled':''}><div class="hint">Se pide para volver a Administrador desde otro perfil.</div></div>
  </div><div class="bar" style="margin-top:12px"><button class="btn pri" data-act="savePin">Guardar PIN</button></div></div>
  <div class="card"><h3>Sincronización con Google Drive</h3>
  <div class="kv" style="margin-bottom:12px"><span>Conexión</span><span>${navigator.onLine?'<span class="tag ok">En línea</span>':'<span class="tag wa">Sin señal</span>'}</span><span>Perfil de la clave</span><span>${c.tokRole?ROLES[c.tokRole]:'—'}</span><span>Cambios por enviar</span><span>${pend}</span><span>Fotos por subir</span><span>${pendingPhotos().length}</span><span>Última sincronización</span><span>${S.lastSync?new Date(S.lastSync).toLocaleString('es-CO'):'Nunca'}</span></div>${c.syncErr?`<div class="al ba" style="margin-bottom:10px"><i></i><div>${esc(c.syncErr)}</div></div>`:''}
@@ -1135,7 +1135,7 @@ const ACT={
  copyLink:()=>copyText(S.cfg.sheetUrl),
  xlsx:()=>exportXlsx(),pdf:()=>exportPdf(),
  sync:()=>sync(true),
- savePin:()=>{S.cfg.pin=$('#pin').value.replace(/\D/g,'');save();toast(S.cfg.pin?'PIN guardado':'PIN eliminado')},
+ savePin:()=>{const v=$('#pin').value.replace(/\D/g,'');if(!v){toast(S.cfg.pin?'Escribe el PIN nuevo':'Escribe un PIN de 4 a 6 números');return}if(v.length<4){toast('El PIN debe tener al menos 4 números');return}S.cfg.pin=v;save();render();toast('PIN guardado')},
  saveSync:async()=>{const u=$('#surl').value.trim(),t=$('#stok').value.trim();if(u&&!/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec$/.test(u)&&!/^http:\/\/localhost/.test(u)){toast('El enlace debe terminar en /exec');return}
   if(u!==S.cfg.url||t!==S.cfg.token){S.cfg.scopeUrl='';S.cfg.tokRole='';S.lastSync=0}S.cfg.url=u;S.cfg.token=t;S.cfg.sheetUrl=$('#ssheet').value.trim();save();if(u&&t){toast('Conectando…');await sync(true)}else{render();toast('Configuración guardada')}},
  resend:()=>confirmBox('¿Enviar todo de nuevo al Sheet?','Se envían todos los registros de este equipo. El Sheet conserva la versión más reciente de cada uno.',()=>{S.cfg.pushedAll='';S.lastSync=0;save();sync(true)}),
@@ -1435,7 +1435,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#modal').hidden
 document.addEventListener('change',e=>{
  const k=e.target.dataset.actChange;
  if(k==='rf'||k==='rt'){if(e.target.value){V.f[k]=e.target.value;V.f.custom=1;render()}}
- if(k==='role'){const nv=e.target.value;const need=['admin','aux'].includes(nv)&&S.cfg.pin&&!['admin','aux'].includes(S.cfg.role);
+ if(k==='role'){const nv=e.target.value;const need=S.cfg.pin&&((nv==='admin'&&S.cfg.role!=='admin')||(nv==='aux'&&!['admin','aux'].includes(S.cfg.role)));
   const apply=()=>{S.cfg.role=nv;save();if(nv==='dueno')go('retro','dueno');else render();toast('Perfil: '+ROLES[nv])};
   if(need){openForm({title:'Ingresa el PIN',fields:[{k:'pin',l:'PIN',t:'password',req:1}],save:v=>{if(v.pin!==S.cfg.pin){setTimeout(render,0);return 'PIN incorrecto'}apply();return 'Acceso concedido'}})}else apply()}
  if(e.target.id==='heroPh'&&e.target.files[0]){const {c,id}=e.target.dataset;const fl=e.target.files[0];compress(fl).then(async data=>{const fid=uid();const rec={name:fl.name,data};await DB.put('files',fid,rec);IMG[fid]=rec;upsert(c,{id,foto:fid});render();openFicha(c,id);toast('Foto actualizada')}).catch(()=>toast('No se pudo leer la foto'))}
