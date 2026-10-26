@@ -43,7 +43,7 @@ const SCHEMA = {
     ['Dueño de la mina', 'invCop', 'n', 0], ['Abono a costos', 'abono', 'n', 0], ['Reparto', '_rep', 'calc', 0], ['Observaciones', 'obs', 't', 1]]},
   rh: {tab: 'APP Retro horas', req: ['fecha', 'hi'], cols: [
     ['Fecha', 'fecha', 'd', 1], ['Horómetro inicio', 'hi', 'n', 1], ['Horómetro final', 'hf', 'n', 1], ['Horas', 'horas', 'n', 0],
-    ['Operador', 'operador', 't', 1], ['Novedad', 'obs', 't', 1], ['Foto', 'fotoUrl', 'link', 0], ['Foto final', 'fotoUrl2', 'link', 0], ['Máquina', 'mq', 'mq', 1]]},
+    ['Operador', 'operador', 't', 1], ['Novedad', 'obs', 't', 1], ['Foto', 'fotoUrl', 'link', 0], ['Foto final', 'fotoUrl2', 'link', 0], ['Máquina', 'mq', 'mq', 1], ['Soporte novedad', 'fotoUrl3', 'link', 0]]},
   rs: {tab: 'APP Retro repuestos', req: ['fecha', 'concepto', 'valor'], cols: [
     ['Fecha', 'fecha', 'd', 1], ['Tipo', 'tipo', 't', 1], ['Concepto', 'concepto', 't', 1], ['Valor', 'valor', 'n', 1],
     ['Lo asume', 'asume', 't', 1], ['Soporte', 'fotoUrl', 'link', 0], ['Máquina', 'mq', 'mq', 1]]},
@@ -297,7 +297,7 @@ function toCell_(rec, k, t, ctx, c) {
   if (t === 'proj') return MODS[rec.p] ? MODS[rec.p].name : (rec.p || '');
   if (t === 'sub') return MODS[rec.p] && MODS[rec.p].subs[rec.s] ? MODS[rec.p].subs[rec.s] : (rec.s || '');
   if (t === 'nat') return NATL[rec.nat] || rec.nat || '';
-  if (t === 'link') return rec[k] || (k === 'fotoUrl' ? rec.fotoN : rec.fotoN2) || '';
+  if (t === 'link') return rec[k] || rec['fotoN' + k.slice(7)] || '';
   if (t === 'ref') return refText_(c, rec, ctx);
   if (t === 'mq') { const m = ctx.maq[mqOf_(rec)]; return m ? m.maq : ''; }
   if (t === 'sc') return scText_(rec.sc, ctx);
@@ -577,12 +577,13 @@ function legacy_(ss, R, T, now) {
       const lk = 'rh|' + key + '|' + occ('rh', key);
       const r = claim('rh', lk, function (x) { return x.fecha + '|' + Number(x.hi); }, fh + '|' + Number(hi));
       const obs = s(row[8]);
-      if (!r) add('rh', {fecha: fh, hi: hi, hf: hf === '' ? '' : hf, horas: hf === '' ? 0 : Math.round((hf - hi) * 100) / 100, operador: s(row[5]), obs: obs, fotoN: s(row[6]), fotoN2: s(row[7]), lk: lk});
+      if (!r) add('rh', {fecha: fh, hi: hi, hf: hf === '' ? '' : hf, horas: hf === '' ? 0 : Math.round((hf - hi) * 100) / 100, operador: s(row[5]), obs: obs, fotoN: s(row[6]), fotoN2: s(row[7]), fotoN3: s(row[9]), lk: lk});
       else {
         let up = false;
         if ((r.hf === '' || r.hf == null) && hf !== '') { r.hf = hf; r.horas = Math.round((hf - Number(r.hi)) * 100) / 100; up = true; }
         if (!r.obs && obs) { r.obs = obs; up = true; }
         if (!r.fotoN2 && s(row[7]) && !r.foto2) { r.fotoN2 = s(row[7]); up = true; }
+        if (!r.fotoN3 && s(row[9]) && !r.foto3) { r.fotoN3 = s(row[9]); up = true; }
         if (up) { r.upd = now; r.srv = now; T.rh.dirty = true; changed = true; }
       }
     }

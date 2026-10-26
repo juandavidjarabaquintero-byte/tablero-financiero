@@ -271,6 +271,7 @@ table.pyg tr.nota td{color:var(--mut);font-style:italic}
 .rl .t small{display:block;color:var(--mut);font-size:13px;margin-top:2px}
 .rl .v{font:700 16px var(--f-disp);white-space:nowrap;font-variant-numeric:tabular-nums}
 .pl{display:inline-block;border:1px solid;border-radius:999px;padding:3px 11px;font-size:12.5px;font-weight:700;white-space:nowrap}
+.pl svg{width:12px;height:12px;vertical-align:-2px;margin-right:4px}
 .pl.nov{color:#ffb547;border-color:#ffb54766;background:#ffb5470f;font-weight:600}
 .rgs{padding:14px 16px}
 .ro .edit-only{display:none!important}
@@ -383,7 +384,8 @@ const IC={
  move:'<path d="M4 8h13l-3-3M20 16H7l3 3"/>',
  list:'<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
  tool:'<path d="M14.7 6.3a4 4 0 0 0 5 5L21 13l-8 8-3-3 8-8-1.3-1.3a4 4 0 0 0-5-5L14 2z"/><path d="M3 21l6-6"/>',
- lock:'<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>'
+ lock:'<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+ clip:'<path d="M21 11l-8.5 8.5a5 5 0 0 1-7-7L14 4a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L15 7"/>'
 };
 const ic=(n,cls='')=>`<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${IC[n]}</svg>`;
 
@@ -834,7 +836,7 @@ function registros(f,owner){
  const tabs=`<div class="seg" role="tablist">${[['j','Jornadas'],['s','Salidas'],['c','Combustible']].map(([k,l])=>`<button role="tab" aria-selected="${t===k}" class="${t===k?'on':''}" data-act="rtab" data-v="${k}">${l}</button>`).join('')}</div>`;
  let rows=[],head='',body='';
  if(t==='j'){rows=LM('rh',mid).filter(r=>inP(r.fecha,f,'')).sort((a,b)=>b.fecha.localeCompare(a.fecha)||(enCurso(a)?-1:0));head=`<span>${rows.length} registros</span><span>${fg(sum(rows,r=>r.horas))} h</span>`;
-  body=rows.map(r=>{const st=jst(r);const c=JC[st];return `<button class="rl" data-act="jdet" data-id="${r.id}"><i class="d" style="color:${c}"></i><span class="t"><b>${fdl(r.fecha)}</b><small>${f1(r.hi)} → ${enCurso(r)?'…':f1(r.hf)}</small></span>${r.obs?'<span class="pl nov">Novedad</span>':''}<span class="pl" style="color:${c};border-color:${c}66;background:${c}1c">${st==='curso'?'En curso':f1(r.horas)+' h'}</span></button>`}).join('')}
+  body=rows.map(r=>{const st=jst(r);const c=JC[st];return `<button class="rl" data-act="jdet" data-id="${r.id}"><i class="d" style="color:${c}"></i><span class="t"><b>${fdl(r.fecha)}</b><small>${f1(r.hi)} → ${enCurso(r)?'…':f1(r.hf)}</small></span>${r.obs||r.foto3||r.fotoN3?`<span class="pl nov">${r.foto3||r.fotoN3?ic('clip'):''}Novedad</span>`:''}<span class="pl" style="color:${c};border-color:${c}66;background:${c}1c">${st==='curso'?'En curso':f1(r.horas)+' h'}</span></button>`}).join('')}
  if(t==='s'){rows=LM('rs',mid).filter(r=>inP(r.fecha,f,'')).sort((a,b)=>b.fecha.localeCompare(a.fecha));head=`<span>${rows.length} registros</span><span>${fmt(sum(rows))}</span>`;
   body=rows.map(r=>`<button class="rl" data-act="sdet" data-c="rs" data-id="${r.id}"><i class="d" style="color:${r.asume==='Mina'?JC.ok:JC.bajo}"></i><span class="t"><b>${esc(String(r.concepto||'').toUpperCase())}</b><small>${esc(r.tipo||'')}${r.asume==='Mina'?' · Asume la mina':''} · ${fdl(r.fecha)}</small></span><span class="v">${fmt(r.valor)}</span></button>`).join('')}
  if(t==='c'){rows=LM('rc',mid).filter(r=>inP(r.fecha,f,'')).sort((a,b)=>b.fecha.localeCompare(a.fecha));head=`<span>${rows.length} registros</span><span>${fmt(sum(rows))}</span>`;
@@ -842,6 +844,8 @@ function registros(f,owner){
  const add=owner?'':`<div class="bar" style="margin-top:12px">${t==='j'?`<button class="btn pri edit-only" data-act="newRh">${ic('plus')}${LM('rh',mid).some(enCurso)?'Registrar jornada':'Iniciar jornada'}</button>`:t==='s'?`<button class="btn pri edit-only" data-act="newRs">${ic('plus')}Registrar salida</button>`:`<button class="btn pri edit-only" data-act="newRc">${ic('plus')}Registrar tanqueo</button>`}</div>`;
  return `<h3 class="sech">Registros</h3><div class="card rgs">${tabs}<div class="rmeta">${head}</div>${body||'<div class="empty">Sin registros en el periodo.</div>'}${add}</div>`;
 }
+const novBtn=(r,big)=>r.foto3?`<button class="${big?'btn sm':'ib'}" style="color:#2ee6f0" data-act="foto" data-id="${esc(r.foto3)}"${r.fotoDrive3?` data-drive="${esc(r.fotoDrive3)}"`:''} title="Ver soporte de la novedad" aria-label="Ver soporte de la novedad">${ic('clip')}${big?'Soporte novedad':''}</button>`:r.fotoN3?`<span class="tag" title="Soporte de la novedad en Drive">${ic('clip')}${esc(r.fotoN3.length>16?r.fotoN3.slice(0,14)+'…':r.fotoN3)}</span>`:canEdit()?`<button class="${big?'btn sm':'ib'} edit-only" data-act="novSop" data-id="${r.id}" title="Subir foto o soporte de la novedad" aria-label="Subir foto o soporte de la novedad">${ic('clip')}${big?'Subir soporte de la novedad':''}</button>`:'';
+function formNov(r){openForm({title:'Novedad · '+fdl(r.fecha),rec:r,fields:[{k:'obs',l:'Novedad',t:'area',w:1,v:r.obs,ph:'Ej. daño, festivo, lluvia'},{k:'foto3',l:'Foto o soporte de la novedad',t:'photo',w:1}],save:v=>{upsert('rh',Object.assign({id:r.id},v));return 'Novedad guardada'}})}
 function jornadaDetalle(r){
  const P=mqById(mqOf(r));const st=jst(r);const c=JC[st];
  $('#sheet').classList.remove('wide');
@@ -849,7 +853,7 @@ function jornadaDetalle(r){
  <div><span class="pl" style="color:${c};border-color:${c}66;background:${c}1c">${({ok:'Meta cumplida',cerca:'Cerca del mínimo',bajo:'Bajo el mínimo',sin:'Sin operación',curso:'En curso'})[st]}</span>${r.obs?' <span class="pl nov">Novedad</span>':''}</div>
  <div class="kv"><span>Horómetro inicio</span><span>${f1(r.hi)}</span><span>Horómetro final</span><span>${enCurso(r)?'—':f1(r.hf)}</span><span>Horas</span><span>${enCurso(r)?'En curso':f1(r.horas)+' h'}</span><span>Valor del día</span><span>${enCurso(r)?'—':fmt(r.horas*P.precio)}</span>${r.operador?`<span>Operador</span><span>${esc(r.operador)}</span>`:''}</div>
  ${r.obs?`<div class="note">${esc(r.obs)}</div>`:''}
- <div class="bar">${r.foto?`<button class="btn sm" data-act="foto" data-id="${esc(r.foto)}"${r.fotoDrive?` data-drive="${esc(r.fotoDrive)}"`:''}>${ic('cam')}Foto inicio</button>`:r.fotoN?`<span class="tag">Foto inicio: ${esc(r.fotoN)}</span>`:''}${r.foto2?`<button class="btn sm" data-act="foto" data-id="${esc(r.foto2)}"${r.fotoDrive2?` data-drive="${esc(r.fotoDrive2)}"`:''}>${ic('cam')}Foto final</button>`:r.fotoN2?`<span class="tag">Foto final: ${esc(r.fotoN2)}</span>`:''}</div></div>
+ <div class="bar">${r.foto?`<button class="btn sm" data-act="foto" data-id="${esc(r.foto)}"${r.fotoDrive?` data-drive="${esc(r.fotoDrive)}"`:''}>${ic('cam')}Foto inicio</button>`:r.fotoN?`<span class="tag">Foto inicio: ${esc(r.fotoN)}</span>`:''}${r.foto2?`<button class="btn sm" data-act="foto" data-id="${esc(r.foto2)}"${r.fotoDrive2?` data-drive="${esc(r.fotoDrive2)}"`:''}>${ic('cam')}Foto final</button>`:r.fotoN2?`<span class="tag">Foto final: ${esc(r.fotoN2)}</span>`:''}${novBtn(r,true)}</div></div>
  ${canEdit()?`<div class="sft"><button class="btn gh" data-act="edit" data-c="rh" data-id="${r.id}">${ic('edit')}Editar</button>${enCurso(r)?`<button class="btn pri" data-act="edit" data-c="rh" data-id="${r.id}">${ic('check')}Cerrar jornada</button>`:''}</div>`:''}`;
  $('#modal').hidden=false;
 }
@@ -878,7 +882,7 @@ SPV.rh=()=>{
  const P=curMq();let rows=LM('rh',P.id).slice().sort((a,b)=>b.fecha.localeCompare(a.fecha));
  return `${mqSel(false)}<div class="card">${toolbar(`<button class="btn pri edit-only" data-act="newRh">${ic('plus')}Registrar día</button>`,false)}<div style="height:10px"></div>
  <div class="tw"><table class="t cards"><thead><tr><th>Fecha</th><th class="n">Horómetro inicio</th><th class="n">Horómetro final</th><th class="n">Horas</th><th class="n">Valor día</th><th>Operador</th><th>Novedad</th><th></th></tr></thead><tbody>
- ${rows.filter(r=>!V.q||[r.obs,r.operador].join(' ').toLowerCase().includes(V.q.toLowerCase())).map(r=>`<tr class="rw"><td class="p num">${fd(r.fecha)}</td><td data-l="Inicio" class="n">${fg(r.hi)}</td><td data-l="Final" class="n">${enCurso(r)?'…':fg(r.hf)}</td><td class="n ${r.horas>0&&r.horas<P.min?'neg':''}">${enCurso(r)?'<span class="pl" style="color:#8b7bff;border-color:#8b7bff66">En curso</span>':fg(r.horas)+' h'}</td><td data-l="Valor" class="n">${enCurso(r)?'—':fmt(r.horas*P.precio)}</td><td data-l="Operador">${esc(r.operador||'')}</td><td data-l="Novedad">${esc(r.obs||'')}</td>${rowActs('rh',r.id,photoBtn(r))}</tr>`).join('')}
+ ${rows.filter(r=>!V.q||[r.obs,r.operador].join(' ').toLowerCase().includes(V.q.toLowerCase())).map(r=>`<tr class="rw"><td class="p num">${fd(r.fecha)}</td><td data-l="Inicio" class="n">${fg(r.hi)}</td><td data-l="Final" class="n">${enCurso(r)?'…':fg(r.hf)}</td><td class="n ${r.horas>0&&r.horas<P.min?'neg':''}">${enCurso(r)?'<span class="pl" style="color:#8b7bff;border-color:#8b7bff66">En curso</span>':fg(r.horas)+' h'}</td><td data-l="Valor" class="n">${enCurso(r)?'—':fmt(r.horas*P.precio)}</td><td data-l="Operador">${esc(r.operador||'')}</td><td data-l="Novedad">${esc(r.obs||'')}</td>${rowActs('rh',r.id,photoBtn(r)+novBtn(r))}</tr>`).join('')}
  </tbody><tfoot><tr><td colspan="3">${rows.length} días</td><td class="n">${fg(sum(rows,r=>r.horas))} h</td><td class="n">${fmt(sum(rows,r=>r.horas)*P.precio)}</td><td colspan="3"></td></tr></tfoot></table></div></div>`;
 };
 SPV.rs=()=>{
@@ -1142,7 +1146,7 @@ function formRh(rec={}){
  const last=LM('rh',mid).filter(r=>!enCurso(r)).sort((a,b)=>a.fecha.localeCompare(b.fecha)).pop();const closing=rec.id&&enCurso(rec);
  openForm({title:(closing?'Cerrar jornada · '+fdl(rec.fecha):rec.id?'Editar jornada':'Registrar jornada')+(mqList().length>1?' · '+P.maq:''),rec,preview:true,
  top:rec.id?'':'<div class="note">Si la máquina sigue trabajando, deja vacío el horómetro final: la jornada queda “En curso” y la cierras después.</div>',
- fields:[{k:'fecha',l:'Fecha',t:'date',v:rec.fecha||today(),req:1},{k:'operador',l:'Operador',v:rec.operador||last?.operador||''},{k:'hi',l:'Horómetro inicio',t:'dec',v:rec.hi??last?.hf??''},{k:'hf',l:'Horómetro final',t:'dec',v:rec.hf??'',ph:'Vacío = en curso'},{k:'obs',l:'Novedad',w:1,v:rec.obs,ph:'Ej. daño, festivo, lluvia'},{k:'foto',l:'Foto horómetro inicio',t:'photo',img:1},{k:'foto2',l:'Foto horómetro final',t:'photo',img:1}],
+ fields:[{k:'fecha',l:'Fecha',t:'date',v:rec.fecha||today(),req:1},{k:'operador',l:'Operador',v:rec.operador||last?.operador||''},{k:'hi',l:'Horómetro inicio',t:'dec',v:rec.hi??last?.hf??''},{k:'hf',l:'Horómetro final',t:'dec',v:rec.hf??'',ph:'Vacío = en curso'},{k:'obs',l:'Novedad',w:1,v:rec.obs,ph:'Ej. daño, festivo, lluvia'},{k:'foto',l:'Foto horómetro inicio',t:'photo',img:1},{k:'foto2',l:'Foto horómetro final',t:'photo',img:1},{k:'foto3',l:'Soporte de la novedad',t:'photo',w:1}],
  onInput:v=>{const open=$('#f_hf')&&$('#f_hf').value.trim()==='';const h=Math.max(0,v.hf-v.hi);$('#prev').innerHTML=open?`<span class="pl" style="color:#8b7bff;border-color:#8b7bff66">En curso</span> <span class="mut">Se guarda sin horas; ciérrala con el horómetro final.</span>`:`<div class="kv"><span>Horas</span><span class="${h&&h<P.min?'neg':''}">${fg(h)} h</span>${propia(P)?'':`<span>Valor del día</span><span>${fmt(h*P.precio)}</span>`}</div>`},
  save:v=>{const open=$('#f_hf').value.trim()==='';if($('#f_hi').value.trim()===''){toast('Falta el horómetro de inicio');return false}
   if(open){v.hf='';v.horas=0}else{if(v.hf<v.hi){toast('El horómetro final es menor que el inicial');return false}v.horas=Math.round((v.hf-v.hi)*100)/100}
@@ -1259,6 +1263,7 @@ const ACT={
  tras:d=>formTras([d.id]),
  rtab:d=>{V.f.rtab=d.v;render()},
  mqSel:d=>{V.mq=d.id;render()},
+ novSop:d=>{const r=byId('rh',d.id);if(r)formNov(r)},
  newMaq:()=>formMaq(),newOwn:()=>formOwn(),
  mqFoto:d=>{const m=byId('maq',d.id);if(m&&m.foto)ACT.foto({id:m.foto,drive:m.fotoDrive||''});else if(canEdit()&&m)formMaq(m);else if(canEdit())formMaq()},
  ownKey:d=>ownKey(d.id,false),
@@ -1608,18 +1613,18 @@ function mergeIn(x){
   if(r.id==='conf'&&(r.upd||0)>(S.cfg.confUpd||0)){if(r.pct)S.cfg.pct=r.pct;if(r.presMina!=null)S.cfg.presMina=r.presMina;S.cfg.confUpd=r.upd}return}
  if(!COLLS.includes(x.c)||!x.rec||!x.rec.id)return;
  const okId=v=>v==null||v===''||/^[\w.:-]{1,80}$/.test(String(v));
- if(!okId(x.rec.id)||!['foto','fotoDrive','foto2','fotoDrive2','per','veh','cab','eq','inm','prest','aid','mq','own'].every(k=>okId(x.rec[k])))return;
+ if(!okId(x.rec.id)||!['foto','fotoDrive','foto2','fotoDrive2','foto3','fotoDrive3','per','veh','cab','eq','inm','prest','aid','mq','own'].every(k=>okId(x.rec[k])))return;
  const cur=byId(x.c,x.rec.id);
  if(!cur){S[x.c].push(x.rec);return}
  if((x.rec.upd||0)>(cur.upd||0)){if(S.outbox.some(o=>o.c===x.c&&o.id===cur.id)&&(cur.upd||0)>(x.rec.upd||0))return;Object.keys(cur).forEach(k=>delete cur[k]);Object.assign(cur,x.rec);S.outbox=S.outbox.filter(o=>!(o.c===x.c&&o.id===cur.id))}
 }
 const FOLDER_OF=(c,r)=>c==='mov'?(r.p==='inm'?(byId('inm',r.inm)?.nombre||'Inmuebles'):PNAME[r.p]||'Otros'):c==='maq'?'Maquinaria':['rh','rs','rc'].includes(c)?'Maquinaria · '+mqById(mqOf(r)).maq:['prest','abonos'].includes(c)?'Préstamos':['veh','cab','inm','eq'].includes(c)?'Activos':'Otros';
-const pendingPhotos=()=>COLLS.flatMap(c=>L(c).flatMap(r=>['','2'].filter(x=>r['foto'+x]&&!r['fotoDrive'+x]).map(x=>({c,r,x}))));
+const pendingPhotos=()=>COLLS.flatMap(c=>L(c).flatMap(r=>['','2','3'].filter(x=>r['foto'+x]&&!r['fotoDrive'+x]).map(x=>({c,r,x}))));
 async function uploadPhotos(){
  if(!canPush())return 0;let n=0;
  for(const {c,r,x} of pendingPhotos().slice(0,8)){
   const f=IMG[r['foto'+x]]||await DB.get('files',r['foto'+x]);if(!f){continue}
-  try{const j=await api('file',{data:f.data,name:f.name||'soporte.jpg',folder:FOLDER_OF(c,r),prefix:(r.fecha||today())+' '+(ASSET[c]?ASSET[c].name(r):(r.maq||r.concepto||r.nombre||(c==='rh'?'jornada'+(x?' final':' inicio'):c)))});upsert(c,{id:r.id,['fotoDrive'+x]:j.fileId,['fotoUrl'+x]:j.url});n++}catch(e){break}
+  try{const j=await api('file',{data:f.data,name:f.name||'soporte.jpg',folder:FOLDER_OF(c,r),prefix:(r.fecha||today())+' '+(ASSET[c]?ASSET[c].name(r):(r.maq||r.concepto||r.nombre||(c==='rh'?'jornada'+(x==='2'?' final':x==='3'?' novedad':' inicio'):c)))});upsert(c,{id:r.id,['fotoDrive'+x]:j.fileId,['fotoUrl'+x]:j.url});n++}catch(e){break}
  }
  return n;
 }
