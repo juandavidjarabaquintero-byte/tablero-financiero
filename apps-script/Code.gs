@@ -43,14 +43,19 @@ const SCHEMA = {
     ['Dueño de la mina', 'invCop', 'n', 0], ['Abono a costos', 'abono', 'n', 0], ['Reparto', '_rep', 'calc', 0], ['Observaciones', 'obs', 't', 1]]},
   rh: {tab: 'APP Retro horas', req: ['fecha', 'hi'], cols: [
     ['Fecha', 'fecha', 'd', 1], ['Horómetro inicio', 'hi', 'n', 1], ['Horómetro final', 'hf', 'n', 1], ['Horas', 'horas', 'n', 0],
-    ['Operador', 'operador', 't', 1], ['Novedad', 'obs', 't', 1], ['Foto', 'fotoUrl', 'link', 0], ['Foto final', 'fotoUrl2', 'link', 0]]},
+    ['Operador', 'operador', 't', 1], ['Novedad', 'obs', 't', 1], ['Foto', 'fotoUrl', 'link', 0], ['Foto final', 'fotoUrl2', 'link', 0], ['Máquina', 'mq', 'mq', 1]]},
   rs: {tab: 'APP Retro repuestos', req: ['fecha', 'concepto', 'valor'], cols: [
     ['Fecha', 'fecha', 'd', 1], ['Tipo', 'tipo', 't', 1], ['Concepto', 'concepto', 't', 1], ['Valor', 'valor', 'n', 1],
-    ['Lo asume', 'asume', 't', 1], ['Soporte', 'fotoUrl', 'link', 0]]},
+    ['Lo asume', 'asume', 't', 1], ['Soporte', 'fotoUrl', 'link', 0], ['Máquina', 'mq', 'mq', 1]]},
   rc: {tab: 'APP Retro combustible', req: ['fecha', 'valor'], cols: [
     ['Fecha', 'fecha', 'd', 1], ['Tipo', 'tipo', 't', 1], ['Cantidad', 'cant', 'n', 1], ['Unidad', 'und', 't', 1],
-    ['Valor', 'valor', 'n', 1], ['Horómetro', 'horo', 'n', 1], ['Soporte', 'fotoUrl', 'link', 0]]},
-  rcort: {tab: 'APP Retro liquidaciones', req: null, cols: [['Fecha de corte', 'fecha', 'd', 1], ['Observaciones', 'obs', 't', 1]]},
+    ['Valor', 'valor', 'n', 1], ['Horómetro', 'horo', 'n', 1], ['Soporte', 'fotoUrl', 'link', 0], ['Máquina', 'mq', 'mq', 1]]},
+  rcort: {tab: 'APP Retro liquidaciones', req: null, cols: [['Fecha de corte', 'fecha', 'd', 1], ['Observaciones', 'obs', 't', 1], ['Máquina', 'mq', 'mq', 0]]},
+  maq: {tab: 'APP Máquinas', req: ['maq'], cols: [
+    ['Máquina', 'maq', 't', 1], ['Tipo', 'tipo', 't', 1], ['Propiedad', 'prop', 't', 1], ['Dueño', 'dueno', 't', 0],
+    ['Precio por hora', 'precio', 'n', 1], ['Mínimo horas por día', 'min', 'n', 1], ['Alerta %', 'alerta', 'n', 1], ['Combustible a cargo del dueño %', 'pctComb', 'n', 1],
+    ['Placa o serie', 'serie', 't', 1], ['Inactiva', 'inactivo', 'bool', 1], ['Foto', 'fotoUrl', 'link', 0]]},
+  own: {tab: 'APP Propietarios', req: ['nombre'], cols: [['Nombre', 'nombre', 't', 1], ['Celular', 'tel', 't', 1], ['Cédula / NIT', 'cedula', 't', 1], ['Máquinas', '_maqs', 'calc', 0]]},
   veh: {tab: 'APP Vehículos', req: ['placa'], cols: [
     ['Placa', 'placa', 't', 1], ['Tipo', 'tipoV', 't', 1], ['Marca y modelo', 'desc', 't', 1], ['Año', 'anio', 't', 1],
     ['Servicio', 'servicio', 't', 1], ['Matrícula', 'matricula', 'd', 1], ['Foto', 'fotoUrl', 'link', 0]]},
@@ -70,7 +75,9 @@ const SCHEMA = {
 };
 const COLLS = Object.keys(SCHEMA);
 const TECH = ['Borrado', 'ID', 'Actualizado', 'Servidor', 'Datos'];
-const RETRO_COLLS = ['rh', 'rs', 'rc', 'rcort', 'cfgx'];
+const RETRO_COLLS = ['rh', 'rs', 'rc', 'rcort', 'maq', 'own', 'cfgx'];
+const MQ0 = 'm1';
+const mqOf_ = function (r) { return r.mq || MQ0; };
 const ROLES = {
   admin: {scope: 'full', write: true, read: function () { return true; }},
   aux: {scope: 'full', write: true, read: function () { return true; }},
@@ -102,6 +109,8 @@ function configurar() {
 function verClaves() {
   const props = PropertiesService.getScriptProperties();
   Object.keys(ROLES).forEach(function (r) { Logger.log(ROLE_NAMES[r] + ': ' + props.getProperty('TOKEN_' + r)); });
+  const all = props.getProperties();
+  Object.keys(all).filter(function (k) { return k.indexOf('OWNKEY_') === 0; }).forEach(function (k) { Logger.log('DUEÑO ' + k.slice(7) + ': ' + all[k]); });
 }
 
 function cambiarClaves() {
@@ -119,7 +128,7 @@ function tab_(ss, c) {
     sh.getRange(1, 1, 1, headers.length).setValues([headers]);
     sh.setFrozenRows(1);
     sh.getRange(1, 1, 1, headers.length).setFontWeight('bold').setBackground('#131b4d').setFontColor('#ffffff');
-    sh.setTabColor(c === 'mov' ? '#2ee6f0' : RETRO_COLLS.indexOf(c) >= 0 ? '#f2c75c' : '#7b6dff');
+    sh.setTabColor(c === 'mov' ? '#2ee6f0' : RETRO_COLLS.indexOf(c) >= 0 && c !== 'cfgx' ? '#f2c75c' : '#7b6dff');
     const maxR = sh.getMaxRows();
     sc.cols.forEach(function (col, i) {
       const r = sh.getRange(2, i + 1, Math.max(1, maxR - 1), 1);
@@ -187,11 +196,13 @@ function doGet() { return json_({ok: true, app: 'Tablero Financiero', msg: 'Serv
 function doPost(e) {
   try {
     const body = JSON.parse(e.postData.contents || '{}');
-    const role = auth_(body.token);
-    if (!role) return json_({ok: false, error: 'Clave de acceso no válida'});
+    const who = auth_(body.token);
+    if (!who) return json_({ok: false, error: 'Clave de acceso no válida'});
+    const role = who.role;
     const R = ROLES[role];
-    if (body.op === 'ping') return json_({ok: true, role: role, scope: R.scope, serverTime: Date.now()});
-    if (body.op === 'sync') return json_(sync_(body, role));
+    if (body.op === 'ping') return json_({ok: true, role: role, scope: R.scope, own: who.own || '', serverTime: Date.now()});
+    if (body.op === 'sync') return json_(sync_(body, role, who.own));
+    if (body.op === 'ownerKey') { if (role !== 'admin') return json_({ok: false, error: 'Solo el administrador gestiona las claves de los dueños'}); return json_(ownerKey_(body)); }
     if (body.op === 'file') { if (!R.write) return json_({ok: false, error: 'Sin permiso de escritura'}); return json_(saveFile_(body)); }
     if (body.op === 'getFile') return json_(getFile_(body));
     if (body.op === 'report') { if (!R.write) return json_({ok: false, error: 'Sin permiso'}); renderReport_(SpreadsheetApp.openById(CFG.SHEET_ID), body.data || {}); return json_({ok: true}); }
@@ -205,10 +216,24 @@ function json_(o) { return ContentService.createTextOutput(JSON.stringify(o)).se
 
 function auth_(tok) {
   if (!tok) return null;
+  const t = String(tok).trim();
   const props = PropertiesService.getScriptProperties();
   const roles = Object.keys(ROLES);
-  for (let i = 0; i < roles.length; i++) if (props.getProperty('TOKEN_' + roles[i]) === String(tok).trim()) return roles[i];
-  return null;
+  for (let i = 0; i < roles.length; i++) if (props.getProperty('TOKEN_' + roles[i]) === t) return {role: roles[i], own: roles[i] === 'dueno' ? 'o1' : ''};
+  const all = props.getProperties();
+  const k = Object.keys(all).filter(function (x) { return x.indexOf('OWNKEY_') === 0 && all[x] === t; })[0];
+  return k ? {role: 'dueno', own: k.slice(7)} : null;
+}
+
+// Clave de acceso de cada dueño de maquinaria. El dueño "o1" usa la clave original del dueño de la máquina.
+function ownerKey_(b) {
+  const own = String(b.own || '').trim();
+  if (!/^[\w.:-]{1,80}$/.test(own)) return {ok: false, error: 'Propietario inválido'};
+  const props = PropertiesService.getScriptProperties();
+  const name = own === 'o1' ? 'TOKEN_dueno' : 'OWNKEY_' + own;
+  let key = props.getProperty(name);
+  if (!key || b.reset) { key = 'DUE-' + Utilities.getUuid().replace(/-/g, '').slice(0, 12); props.setProperty(name, key); }
+  return {ok: true, own: own, key: key};
 }
 
 /* ===================== Lectura y escritura de pestañas ===================== */
@@ -260,6 +285,7 @@ function fromCell_(v, t, T, rec) {
   if (t === 'sub') { const p = rec.p; if (!p || !MODS[p]) return rec.s; const k = Object.keys(MODS[p].subs).filter(function (s) { return norm_(MODS[p].subs[s]) === norm_(v); })[0]; return k || rec.s; }
   if (t === 'nat') { const k = Object.keys(NATL).filter(function (n) { return norm_(NATL[n]) === norm_(v); })[0]; return k || rec.nat; }
   if (t === 'ref' || t === 'sc') { rec['__' + t] = String(v || '').trim(); return undefined; }
+  if (t === 'mq') { rec.__mq = String(v || '').trim(); return undefined; }
   if (t === 'link' || t === 'calc') return undefined;
   return v === null || v === undefined ? '' : String(v);
 }
@@ -273,6 +299,7 @@ function toCell_(rec, k, t, ctx, c) {
   if (t === 'nat') return NATL[rec.nat] || rec.nat || '';
   if (t === 'link') return rec[k] || (k === 'fotoUrl' ? rec.fotoN : rec.fotoN2) || '';
   if (t === 'ref') return refText_(c, rec, ctx);
+  if (t === 'mq') { const m = ctx.maq[mqOf_(rec)]; return m ? m.maq : ''; }
   if (t === 'sc') return scText_(rec.sc, ctx);
   if (t === 'calc') return calc_(c, k, rec, ctx);
   const v = rec[k] == null ? '' : rec[k];
@@ -303,6 +330,7 @@ function money_(n) { return '$' + Math.round(Number(n) || 0).toString().replace(
 function calc_(c, k, r, ctx) {
   if (c === 'mov' && k === '_det') return r.arrTipo ? 'Arriendo: ' + r.arrTipo + (r.arrDesc ? ' · ' + r.arrDesc : '') + (r.arrMes ? ' · ' + r.arrMes : '') : '';
   if (c === 'prest' && k === '_ab') return ctx.ab[r.id] || 0;
+  if (c === 'own' && k === '_maqs') return Object.keys(ctx.maq).filter(function (id) { return ctx.maq[id].own === r.id; }).map(function (id) { return ctx.maq[id].maq; }).join(', ');
   if (c === 'prest' && k === '_saldo') return (Number(r.valor) || 0) - (ctx.ab[r.id] || 0);
   if (c === 'cortes' && k === '_rep') return (r.liq || []).map(function (l) { return l.label + (l.nombre ? ' (' + l.nombre + ')' : '') + ': ' + money_(l.cop); }).join('; ');
   if (c === 'obl' && k === '_act') { const a = (ctx[r.ac] || {})[r.aid]; return OBL_ASSET[r.ac] + ': ' + (a ? (a.placa || a.nombre) : '—'); }
@@ -359,7 +387,7 @@ function clean_(rec) {
 
 function ctx_(R) {
   const ctx = {ab: {}};
-  ['inm', 'veh', 'cab', 'per', 'eq', 'prest'].forEach(function (c) { ctx[c] = {}; R[c].forEach(function (r) { if (r.id && !r.del) ctx[c][r.id] = r; }); });
+  ['inm', 'veh', 'cab', 'per', 'eq', 'prest', 'maq', 'own'].forEach(function (c) { ctx[c] = {}; R[c].forEach(function (r) { if (r.id && !r.del) ctx[c][r.id] = r; }); });
   R.abonos.forEach(function (a) { if (!a.del && a.prest) ctx.ab[a.prest] = (ctx.ab[a.prest] || 0) + (Number(a.valor) || 0); });
   return ctx;
 }
@@ -371,6 +399,16 @@ function findBy_(map, field, text) {
 }
 
 function resolveRefs_(R, ctx) {
+  ['rh', 'rs', 'rc', 'rcort'].forEach(function (c) {
+    R[c].forEach(function (r) {
+      const cell = r.__mq; delete r.__mq;
+      if (!cell) return;
+      const cur = ctx.maq[mqOf_(r)];
+      if (cur && norm_(cur.maq) === norm_(cell)) return;
+      const id = findBy_(ctx.maq, 'maq', cell);
+      if (id) { r.mq = id; r.__mqch = 1; }
+    });
+  });
   R.mov.forEach(function (r) {
     const cell = r.__ref; delete r.__ref;
     if (cell === undefined || cell === refText_('mov', r, ctx)) return;
@@ -431,7 +469,7 @@ function writeTab_(T, recs, ctx) {
 }
 
 /* ===================== Sincronización ===================== */
-function sync_(body, role) {
+function sync_(body, role, own) {
   const R0 = ROLES[role];
   const lock = LockService.getScriptLock();
   lock.waitLock(28000);
@@ -448,6 +486,7 @@ function sync_(body, role) {
     });
     let ctx = ctx_(R);
     resolveRefs_(R, ctx);
+    ['rh', 'rs', 'rc', 'rcort'].forEach(function (c) { R[c].forEach(function (r) { if (r.__mqch) { T[c].dirty = true; delete r.__mqch; } }); });
     COLLS.forEach(function (c) {
       R[c].forEach(function (rec) {
         if (rec.id) return;
@@ -476,14 +515,31 @@ function sync_(body, role) {
     COLLS.forEach(function (c) { if (T[c].dirty) writeTab_(T[c], R[c], ctx); });
     const since = Number(body.since) || 0;
     const out = [];
+    let mine = null;
+    const since0 = Number(body.since) || 0;
+    if (role === 'dueno') {
+      mine = {};
+      R.maq.forEach(function (m) { if (m.id && !m.del && m.own === own) mine[m.id] = (Number(m.srv) || 0) > since0 ? 2 : 1; });
+      if (own === 'o1' && !R.maq.some(function (m) { return m.id === MQ0; })) mine[MQ0] = 1;
+    }
+    const visible = function (c, rec) {
+      if (!mine) return true;
+      if (c === 'maq') return !!mine[rec.id];
+      if (c === 'own') return rec.id === own;
+      if (c === 'cfgx') return rec.id === 'retroP' && own === 'o1';
+      return !!mine[mqOf_(rec)];
+    };
     COLLS.forEach(function (c) {
       if (!R0.read(c)) return;
       R[c].forEach(function (rec) {
-        if (rec.__skip || !rec.id || seen[c + ':' + rec.id]) return;
-        if (since === 0 || (Number(rec.srv) || 0) > since || force[c + ':' + rec.id]) out.push({c: c, rec: clean_(rec)});
+        if (rec.__skip || !rec.id || seen[c + ':' + rec.id] || !visible(c, rec)) return;
+        const fresh = mine && RETRO_COLLS.indexOf(c) >= 0 && ['rh', 'rs', 'rc', 'rcort'].indexOf(c) >= 0 && mine[mqOf_(rec)] === 2;
+        if (since === 0 || (Number(rec.srv) || 0) > since || force[c + ':' + rec.id] || fresh) out.push({c: c, rec: clean_(rec)});
       });
     });
-    return {ok: true, serverTime: now, changes: out, accepted: acc, rejected: rej, role: role, scope: R0.scope};
+    const res = {ok: true, serverTime: now, changes: out, accepted: acc, rejected: rej, role: role, scope: R0.scope, own: own || ''};
+    if (mine) res.mqs = Object.keys(mine);
+    return res;
   } finally { lock.releaseLock(); }
 }
 
@@ -502,14 +558,15 @@ function legacy_(ss, R, T, now) {
   const s = function (x) { return String(x == null ? '' : x).trim(); };
   let changed = false;
   const index = function (c) { const m = {}; R[c].forEach(function (r) { if (r.lk) m[r.lk] = r; }); return m; };
+  const m1 = function (x) { return mqOf_(x) === MQ0; };
   const claim = function (c, lk, keyOf, key) {
     const byLk = index(c);
     if (byLk[lk]) return byLk[lk];
-    const r = R[c].filter(function (x) { return !x.lk && keyOf(x) === key; })[0];
+    const r = R[c].filter(function (x) { return !x.lk && m1(x) && keyOf(x) === key; })[0];
     if (r) { r.lk = lk; T[c].dirty = true; }
     return r || null;
   };
-  const add = function (c, rec) { rec.id = Utilities.getUuid(); rec.cre = now; rec.upd = now; rec.srv = now; rec.by = 'tablero anterior'; rec.__i = -1; R[c].push(rec); T[c].dirty = true; changed = true; };
+  const add = function (c, rec) { rec.id = Utilities.getUuid(); rec.cre = now; rec.upd = now; rec.srv = now; rec.by = 'tablero anterior'; rec.mq = MQ0; rec.__i = -1; R[c].push(rec); T[c].dirty = true; changed = true; };
   const seen = {rh: {}, rs: {}, rc: {}};
   const occ = function (c, key) { seen[c][key] = (seen[c][key] || 0) + 1; return seen[c][key] - 1; };
   v.forEach(function (row) {

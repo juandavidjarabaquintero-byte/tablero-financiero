@@ -21,6 +21,8 @@ La primera sincronización envía todos tus datos al Sheet y crea la pestaña **
 | Contador | Contador | Ver todo e informes, sin modificar |
 | Dueño de la máquina | Dueño máquina | Solo ve la retroexcavadora |
 
+**Varios dueños de maquinaria:** cada dueño tiene su propia clave. En la app (como administrador): Maquinaria → elige la máquina → **Clave del dueño**, o Ajustes → Dueños de maquinaria → ícono de candado. Desde ahí se copia o se envía por WhatsApp. El dueño solo ve sus máquinas. La clave "Dueño máquina" original sigue sirviendo para el primer dueño (JP).
+
 Cada persona instala la app desde el enlace, va a Ajustes y pone la misma URL con su clave. No necesitan cargar `datos-iniciales.json`.
 
 Para ver las claves otra vez: ejecuta la función `verClaves`. Para cambiarlas todas: `cambiarClaves` (habrá que poner las nuevas en cada equipo).

@@ -211,6 +211,8 @@ img[src]~.phc{display:none}
 .hero .cap b{display:block;font:700 22px/1.2 var(--f-disp);letter-spacing:.02em}
 .hero .cap .btn{margin-left:auto}
 .avatar{flex:none;width:56px;height:56px;border-radius:50%;border:1.5px solid var(--cyan);padding:0;cursor:pointer}
+.hero.mqh{display:block;aspect-ratio:21/9;max-height:260px;border:0;padding:0;margin:0 0 14px;cursor:zoom-in;border-radius:14px}
+.mqtabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;max-width:100%}.mqtabs::-webkit-scrollbar{display:none}.mqtabs .chip{flex:none}
 .avatar .phc svg{width:24px;height:24px}
 .thumb{width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid var(--line2)}
 .sheet.wide{width:min(780px,100%)}
@@ -380,7 +382,8 @@ const IC={
  check:'<path d="M5 12l5 5L20 7"/>',
  move:'<path d="M4 8h13l-3-3M20 16H7l3 3"/>',
  list:'<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
- tool:'<path d="M14.7 6.3a4 4 0 0 0 5 5L21 13l-8 8-3-3 8-8-1.3-1.3a4 4 0 0 0-5-5L14 2z"/><path d="M3 21l6-6"/>'
+ tool:'<path d="M14.7 6.3a4 4 0 0 0 5 5L21 13l-8 8-3-3 8-8-1.3-1.3a4 4 0 0 0-5-5L14 2z"/><path d="M3 21l6-6"/>',
+ lock:'<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>'
 };
 const ic=(n,cls='')=>`<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${IC[n]}</svg>`;
 
@@ -408,7 +411,7 @@ const MOD=[
   {id:'servicios',name:'Pago de servicios',nat:'gasto',cats:['Energía','Agua','Internet','Gas']},
   {id:'obligaciones',name:'Pagos y obligaciones',nat:'gasto',cats:['Licencia','Impuesto predial','Escrituras','Crédito','Mantenimiento','Otro'],catNat:{'Licencia':'inversion','Escrituras':'inversion'},nats:['gasto','inversion']}
  ]},
- {id:'retro',name:'Retroexcavadora',ic:'dig',subs:[
+ {id:'retro',name:'Maquinaria',ic:'dig',subs:[
   {id:'resumen',name:'Liquidación',sp:'rres'},
   {id:'horas',name:'Registro de horas',sp:'rh'},
   {id:'salidas',name:'Repuestos y reparaciones',sp:'rs'},
@@ -507,7 +510,7 @@ async function sendIcs(list,name){if(!list.length){toast('No hay recordatorios p
  dl(new Blob([ics],{type:'text/calendar'}),fname)}
 const IMG={};
 async function hydrate(root=document){for(const im of root.querySelectorAll('img[data-fid]:not([src])')){const id=im.dataset.fid;let f=IMG[id];if(!f){f=await DB.get('files',id);if(f)IMG[id]=f}if(!f&&im.dataset.drive)f=await fetchDrive(id,im.dataset.drive);if(f&&String(f.data).startsWith('data:image'))im.src=f.data}}
-const PNAME={personal:'Gastos personales',parcela:'Parcela Las Colinas',inm:'Inmuebles',mina:'Mina La Fe',retro:'Retroexcavadora',prestamos:'Préstamos'};
+const PNAME={personal:'Gastos personales',parcela:'Parcela Las Colinas',inm:'Inmuebles',mina:'Mina La Fe',retro:'Maquinaria',prestamos:'Préstamos'};
 const ROLES={admin:'Administrador',aux:'Auxiliar contable',conta:'Contador',dueno:'Dueño de la máquina'};
 const MROL={'Empleado directo':{part:'emp'},'Administrador':{part:'adm'},'Comisionista':{part:'com'},'Dueño del terreno':{part:'ter',mensual:true},'Asesor ambiental':{mensual:true},'Operador de la máquina':{mensual:true}};
 const NOMCATS={mina:['Anticipo','Pago mensual','Colero (bonificación)'],parcela:['Pago salario','Adelanto','Prima / bonificación','Liquidación'],inm:['Adelanto','Pago','Liquidación final']};
@@ -546,16 +549,27 @@ function byIdIn(a,id){return a.find(r=>r.id===id)}
 function natNomMina(cat,rol){if(cat==='Anticipo'&&MROL[rol]?.part)return 'anticipo';return 'costo'}
 
 /* ---------- cálculos ---------- */
-function retroCalc(f,t){
- const P=S.retroP;const h=L('rh').filter(r=>inP(r.fecha,f,t));
+/* Maquinaria: varias máquinas, cada una con su dueño */
+const MQ0='m1';const mqOf=r=>r.mq||MQ0;
+const MQTIPOS=['Retroexcavadora','Excavadora','Bulldozer','Volqueta','Cargador','Motoniveladora','Vibrocompactador','Otra'];
+const mqDefault=()=>{const P=S.retroP||{};return {id:MQ0,maq:P.maq||'Máquina',tipo:'Retroexcavadora',prop:'Tercero',dueno:P.dueno||'',own:'',precio:P.precio||0,min:P.min??7,alerta:P.alerta??80,pctComb:P.pctComb||0}};
+function mqList(){return L('maq').slice().sort((a,b)=>(!!a.inactivo-!!b.inactivo)||(a.id===MQ0?-1:b.id===MQ0?1:String(a.maq).localeCompare(String(b.maq))))}
+function curMq(){const l=mqList();if(!V.mq||!l.find(m=>m.id===V.mq))V.mq=l[0]?.id||MQ0;return byId('maq',V.mq)||mqDefault()}
+const mqById=id=>{const m=byId('maq',id);return m&&!m.del?m:Object.assign(mqDefault(),{id,maq:id===MQ0?'Máquina':'Máquina eliminada'})};
+const propia=P=>P.prop==='Propia';
+const LM=(c,mid)=>L(c).filter(r=>mqOf(r)===mid);
+const mqIds=()=>[...new Set([...L('maq').map(m=>m.id),...['rh','rs','rc'].flatMap(c=>L(c).map(mqOf))])];
+function retroCalc(f,t,mid){
+ if(mid==null){const parts=mqIds().map(id=>retroCalc(f,t,id));const o={h:parts.flatMap(p=>p.h),parts};['horas','dias','bajo','renta','repD','salM','comb','combD','neto','cargoMina','costoMina'].forEach(k=>o[k]=sum(parts,p=>p[k]));o.prom=o.dias?o.horas/o.dias:0;return o}
+ const P=mqById(mid);const own=propia(P);const h=LM('rh',mid).filter(r=>inP(r.fecha,f,t));
  const horas=sum(h,r=>r.horas);const dias=h.filter(r=>r.horas>0).length;const bajo=h.filter(r=>r.horas>0&&r.horas<P.min).length;
- const renta=horas*P.precio;const sal=L('rs').filter(r=>inP(r.fecha,f,t));
- const repD=sum(sal.filter(r=>r.asume!=='Mina'));const salM=sum(sal.filter(r=>r.asume==='Mina'));
- const comb=sum(L('rc').filter(r=>inP(r.fecha,f,t)));const combD=comb*(P.pctComb||0)/100;
+ const renta=own?0:horas*(P.precio||0);const sal=LM('rs',mid).filter(r=>inP(r.fecha,f,t));
+ const repD=own?0:sum(sal.filter(r=>r.asume!=='Mina'));const salM=sum(sal)-repD;
+ const comb=sum(LM('rc',mid).filter(r=>inP(r.fecha,f,t)));const combD=own?0:comb*(P.pctComb||0)/100;
  const neto=renta-repD-combD;const cargoMina=comb-combD+salM;
- return {h,horas,dias,prom:dias?horas/dias:0,bajo,renta,repD,salM,comb,combD,neto,cargoMina,costoMina:renta+cargoMina};
+ return {h,horas,dias,prom:dias?horas/dias:0,bajo,renta,repD,salM,comb,combD,neto,cargoMina,costoMina:renta+cargoMina,P,mid};
 }
-const lastRetroCorte=()=>L('rcort').map(r=>r.fecha).sort().pop()||'';
+const lastRetroCorte=mid=>LM('rcort',mid??curMq().id).map(r=>r.fecha).sort().pop()||'';
 function anticiposPend(perId,exclCorte){
  const ant=sum(L('mov').filter(r=>r.p==='mina'&&r.s==='nomina'&&r.per===perId&&r.nat==='anticipo'));
  const desc=sum(L('cortes').filter(c=>c.id!==exclCorte).flatMap(c=>c.liq||[]).filter(x=>x.per===perId),x=>x.desc);
@@ -588,7 +602,7 @@ function report(f,t){
  L('inm').forEach(i=>{const x=mk('inm:'+i.id,i.nombre,M.filter(r=>r.p==='inm'&&r.inm===i.id),'inm');x.pres=i.pres});
  const sinInm=M.filter(r=>r.p==='inm'&&!L('inm').some(i=>i.id===r.inm));if(sinInm.length)mk('inm:?','Inmuebles (sin asignar)',sinInm,'inm');
  const mn=mk('mina','Mina La Fe',M.filter(r=>r.p==='mina'),'mina');
- const rc=retroCalc(f,t);mn.cos+=rc.costoMina;mn.subs['Retroexcavadora (renta y combustible)']=rc.costoMina;mn.retro=rc;
+ const rc=retroCalc(f,t);mn.cos+=rc.costoMina;mn.subs['Maquinaria (renta, combustible y repuestos)']=rc.costoMina;mn.retro=rc;
  const cs=L('cortes').filter(c=>inP(c.fecha,f,t));mn.ing=sum(cs,c=>c.invCop);mn.oroG=sum(cs,c=>c.gramos);mn.bruto=sum(cs,c=>c.total);mn.cortes=cs.length;
  rows.forEach(r=>{r.util=r.ing-r.gas-r.cos;r.egr=r.gas+r.cos+r.inv});
  mn.rent=(mn.cos+mn.inv)?mn.util/(mn.cos+mn.inv)*100:0;
@@ -617,7 +631,7 @@ function renderNav(){
   <div class="subs" ${open?'':'hidden'}>${m.subs.map(s=>`<button class="sb ${on&&V.s===s.id?'on':''}" data-act="go" data-m="${m.id}" data-s="${s.id}">${s.name}</button>`).join('')}</div>`}).join('');
  $('#nav').innerHTML=h;
  const pend=S.outbox.length;
- $('#sideFoot').innerHTML=S.cfg.role==='dueno'?`<div class="lbl">Máquina</div><div class="big" style="font-size:16px">${esc(S.retroP.maq)}</div>`:
+ $('#sideFoot').innerHTML=S.cfg.role==='dueno'?`<div class="lbl">${mqList().length>1?'Máquinas':'Máquina'}</div>${mqList().map(m=>`<div class="big" style="font-size:15px">${esc(m.maq)}</div>`).join('')||'<div class="mut">Sin máquinas asignadas</div>'}`:
   `<div class="lbl">Préstamos por cobrar</div><div class="big">${fmt(sum(L('prest'))-sum(L('abonos')))}</div><div class="lbl" style="margin-top:4px">Pendiente de sincronizar</div><div style="font-weight:700">${pend} cambio${pend===1?'':'s'}</div>`;
 }
 function go(m,s){
@@ -780,11 +794,22 @@ SPV.cortes=()=>{
 function liqTable(liq){return `<table class="t"><thead><tr><th>Beneficiario</th><th class="n">%</th><th class="n">Gramos</th><th class="n">Valor</th><th class="n">Anticipos desc.</th><th class="n">Neto</th></tr></thead><tbody>${(liq||[]).map(l=>`<tr class="rw"><td>${esc(l.label)}${l.nombre?`<div class="mut" style="font-size:12px">${esc(l.nombre)}</div>`:''}</td><td class="n">${fg(l.pct)}%</td><td class="n gold">${fg(l.g)}</td><td class="n">${fmt(l.cop)}</td><td class="n">${l.desc?fmt(-l.desc):'—'}</td><td class="n ${l.key==='inv'?'pos':''}">${fmt(l.neto)}</td></tr>`).join('')}</tbody></table>`}
 
 /* Retroexcavadora */
-function retroPeriodo(){const lc=lastRetroCorte();return {f:lc?addDays(lc,1):'',lc}}
+function retroPeriodo(mid){const lc=lastRetroCorte(mid);return {f:lc?addDays(lc,1):'',lc}}
 function retroKpis(R,owner){
- const P=S.retroP;
- return `<div class="grid k4">${kpi('Horas trabajadas',fg(R.horas)+' h',`${R.dias} días · ${fg(R.prom)} h/día`,'c-cy')}${kpi('Renta total',fmt(R.renta),fmt(P.precio)+' por hora','c-te')}${kpi('Repuestos y reparaciones',fmt(-R.repD),'Asume el dueño','c-wa')}${kpi('Neto a pagar al dueño',fmt(R.neto),R.combD?'Incluye descuento de combustible':'Renta menos repuestos','c-go','gold')}</div>
+ const P=R.P||curMq();
+ if(propia(P))return `<div class="grid k4">${kpi('Horas trabajadas',fg(R.horas)+' h',`${R.dias} día${R.dias===1?'':'s'} · ${fg(R.prom)} h/día`,'c-cy')}${kpi('Repuestos y reparaciones',fmt(R.salM),'Máquina propia','c-wa')}${kpi('Combustible y aceites',fmt(R.comb),'Máquina propia','c-vi')}${kpi('Costo de operación',fmt(R.costoMina),R.horas?fmt(R.costoMina/R.horas)+' por hora':'Sin horas en el periodo','c-ba')}</div>
+ <div class="grid k4">${kpi('Días bajo mínimo',R.bajo,`Mínimo ${fg(P.min)} h por día`,R.bajo?'c-ba':'c-te',R.bajo?'neg':'')}</div>`;
+ return `<div class="grid k4">${kpi('Horas trabajadas',fg(R.horas)+' h',`${R.dias} día${R.dias===1?'':'s'} · ${fg(R.prom)} h/día`,'c-cy')}${kpi('Renta total',fmt(R.renta),fmt(P.precio)+' por hora','c-te')}${kpi('Repuestos y reparaciones',fmt(-R.repD),'Asume el dueño','c-wa')}${kpi('Neto a pagar al dueño',fmt(R.neto),R.combD?'Incluye descuento de combustible':'Renta menos repuestos','c-go','gold')}</div>
  <div class="grid k4">${kpi('Días bajo mínimo',R.bajo,`Mínimo ${fg(P.min)} h por día`,R.bajo?'c-ba':'c-te',R.bajo?'neg':'')}${kpi('Combustible y aceites',fmt(R.comb),(100-(P.pctComb||0))+'% a cargo de la mina','c-vi')}${owner?'':kpi('Costo total para la mina',fmt(R.costoMina),'Renta + combustible + salidas de la mina','c-ba')}</div>`;
+}
+const mqImg=(m,cls)=>`${m.foto?`<img data-fid="${esc(m.foto)}"${m.fotoDrive?` data-drive="${esc(m.fotoDrive)}"`:''} alt="Foto de ${esc(m.maq)}">`:''}<span class="phc">${ic('dig')}</span>`;
+const mqSub=m=>[m.tipo,propia(m)?'Propia':(m.dueno?'Dueño '+m.dueno:'Sin dueño asignado'),m.serie].filter(Boolean).join(' · ');
+function mqSel(owner){
+ const l=mqList();const cur=curMq();
+ const chips=l.length>1||!owner?`<div class="chips mqtabs" role="tablist">${l.map(m=>`<button role="tab" aria-selected="${m.id===cur.id}" class="chip ${m.id===cur.id?'on':''}" data-act="mqSel" data-id="${m.id}">${esc(m.maq)}${m.inactivo?' · inactiva':''}</button>`).join('')}</div>`:'';
+ if(owner)return chips?`<div class="card" style="padding:12px 14px">${chips}</div>`:'';
+ return `<div class="card"><div class="split">${chips}<div class="bar"><button class="btn sm gh edit-only" data-act="newMaq">${ic('plus')}Nueva máquina</button>${byId('maq',cur.id)?`<button class="btn sm gh edit-only" data-act="edit" data-c="maq" data-id="${cur.id}">${ic('edit')}Editar</button>`:''}</div></div>
+ <div class="bar" style="margin-top:14px;flex-wrap:nowrap"><button class="avatar" data-act="mqFoto" data-id="${cur.id}" aria-label="Foto de ${esc(cur.maq)}">${mqImg(cur)}</button><div style="min-width:0;flex:1"><b>${esc(cur.maq)}</b><div class="mut" style="font-size:12.5px">${esc(mqSub(cur))}</div><div class="mut" style="font-size:12.5px">${propia(cur)?'Sin renta: los costos son de la operación':fmt(cur.precio)+' por hora · mínimo '+fg(cur.min)+' h/día'}</div></div>${!propia(cur)&&cur.own&&S.cfg.tokRole==='admin'?`<button class="btn sm gh" data-act="ownKey" data-id="${cur.own}">${ic('lock')}Clave del dueño</button>`:''}</div></div>`;
 }
 const DIAS=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'],MESU=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 const fdl=s=>{if(!s)return '';const d=new Date(s+'T12:00:00');return `${DIAS[d.getDay()]} ${s.slice(8,10)} ${MESU[+s.slice(5,7)-1]} ${s.slice(2,4)}`};
@@ -792,9 +817,9 @@ const fds=s=>s?`${s.slice(8,10)} ${MESU[+s.slice(5,7)-1]} ${s.slice(2,4)}`:'';
 const enCurso=r=>r.hf===''||r.hf==null;
 const f1=n=>(+n||0).toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:2});
 const JC={ok:'#1fe0a0',cerca:'#ffb547',bajo:'#ff4f73',sin:'#8b93b5',curso:'#8b7bff'};
-function jst(r){const P=S.retroP;if(enCurso(r))return 'curso';if(!(r.horas>0))return 'sin';if(r.horas>=P.min)return 'ok';if(r.horas>=P.min*(P.alerta||80)/100)return 'cerca';return 'bajo'}
-function hoursChart(h){
- const P=S.retroP;const d=h.filter(r=>!enCurso(r)).sort((a,b)=>a.fecha.localeCompare(b.fecha)).slice(-21);
+function jst(r){const P=mqById(mqOf(r));if(enCurso(r))return 'curso';if(!(r.horas>0))return 'sin';if(r.horas>=P.min)return 'ok';if(r.horas>=P.min*(P.alerta||80)/100)return 'cerca';return 'bajo'}
+function hoursChart(h,P){
+ P=P||curMq();const d=h.filter(r=>!enCurso(r)).sort((a,b)=>a.fecha.localeCompare(b.fecha)).slice(-21);
  if(!d.length)return '<div class="empty">Sin jornadas registradas.</div>';
  const W=640,H=240,pl=8,pr=8,pt=26,pb=34;const mx=Math.max(P.min*1.45,...d.map(r=>r.horas))*1.04;const bw=(W-pl-pr)/d.length;const y=v=>pt+(H-pt-pb)*(1-v/mx);
  let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Rendimiento diario de la máquina"><defs><filter id="glw" x="-50%" y="-20%" width="200%" height="160%"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>`;
@@ -805,20 +830,20 @@ function hoursChart(h){
  return `<div class="chart">${s}</div><div class="lg2"><span><i style="background:${JC.ok}"></i>Meta cumplida ${cnt('ok')}</span><span><i style="background:${JC.cerca}"></i>Cerca ${cnt('cerca')}</span><span><i style="background:${JC.bajo}"></i>Bajo mínimo ${cnt('bajo')}</span><span><i style="background:${JC.sin}"></i>Sin operación ${cnt('sin')}</span><span><i style="background:#ffb547"></i>Con novedad ${nov}</span></div>`;
 }
 function registros(f,owner){
- const t=V.f.rtab||'j';const P=S.retroP;
+ const t=V.f.rtab||'j';const P=curMq();const mid=P.id;
  const tabs=`<div class="seg" role="tablist">${[['j','Jornadas'],['s','Salidas'],['c','Combustible']].map(([k,l])=>`<button role="tab" aria-selected="${t===k}" class="${t===k?'on':''}" data-act="rtab" data-v="${k}">${l}</button>`).join('')}</div>`;
  let rows=[],head='',body='';
- if(t==='j'){rows=L('rh').filter(r=>inP(r.fecha,f,'')).sort((a,b)=>b.fecha.localeCompare(a.fecha)||(enCurso(a)?-1:0));head=`<span>${rows.length} registros</span><span>${fg(sum(rows,r=>r.horas))} h</span>`;
+ if(t==='j'){rows=LM('rh',mid).filter(r=>inP(r.fecha,f,'')).sort((a,b)=>b.fecha.localeCompare(a.fecha)||(enCurso(a)?-1:0));head=`<span>${rows.length} registros</span><span>${fg(sum(rows,r=>r.horas))} h</span>`;
   body=rows.map(r=>{const st=jst(r);const c=JC[st];return `<button class="rl" data-act="jdet" data-id="${r.id}"><i class="d" style="color:${c}"></i><span class="t"><b>${fdl(r.fecha)}</b><small>${f1(r.hi)} → ${enCurso(r)?'…':f1(r.hf)}</small></span>${r.obs?'<span class="pl nov">Novedad</span>':''}<span class="pl" style="color:${c};border-color:${c}66;background:${c}1c">${st==='curso'?'En curso':f1(r.horas)+' h'}</span></button>`}).join('')}
- if(t==='s'){rows=L('rs').filter(r=>inP(r.fecha,f,'')).sort((a,b)=>b.fecha.localeCompare(a.fecha));head=`<span>${rows.length} registros</span><span>${fmt(sum(rows))}</span>`;
+ if(t==='s'){rows=LM('rs',mid).filter(r=>inP(r.fecha,f,'')).sort((a,b)=>b.fecha.localeCompare(a.fecha));head=`<span>${rows.length} registros</span><span>${fmt(sum(rows))}</span>`;
   body=rows.map(r=>`<button class="rl" data-act="sdet" data-c="rs" data-id="${r.id}"><i class="d" style="color:${r.asume==='Mina'?JC.ok:JC.bajo}"></i><span class="t"><b>${esc(String(r.concepto||'').toUpperCase())}</b><small>${esc(r.tipo||'')}${r.asume==='Mina'?' · Asume la mina':''} · ${fdl(r.fecha)}</small></span><span class="v">${fmt(r.valor)}</span></button>`).join('')}
- if(t==='c'){rows=L('rc').filter(r=>inP(r.fecha,f,'')).sort((a,b)=>b.fecha.localeCompare(a.fecha));head=`<span>${rows.length} registros</span><span>${fmt(sum(rows))}</span>`;
+ if(t==='c'){rows=LM('rc',mid).filter(r=>inP(r.fecha,f,'')).sort((a,b)=>b.fecha.localeCompare(a.fecha));head=`<span>${rows.length} registros</span><span>${fmt(sum(rows))}</span>`;
   body=rows.map(r=>`<button class="rl" data-act="sdet" data-c="rc" data-id="${r.id}"><i class="d" style="color:${JC.cerca}"></i><span class="t"><b>${esc(r.tipo||'')}${r.cant?' · '+fg(r.cant)+' '+esc(r.und||''):''}</b><small>${fdl(r.fecha)}${r.horo?' · horómetro '+fg(r.horo):''}</small></span><span class="v">${fmt(r.valor)}</span></button>`).join('')}
- const add=owner?'':`<div class="bar" style="margin-top:12px">${t==='j'?`<button class="btn pri edit-only" data-act="newRh">${ic('plus')}${L('rh').some(enCurso)?'Registrar jornada':'Iniciar jornada'}</button>`:t==='s'?`<button class="btn pri edit-only" data-act="newRs">${ic('plus')}Registrar salida</button>`:`<button class="btn pri edit-only" data-act="newRc">${ic('plus')}Registrar tanqueo</button>`}</div>`;
+ const add=owner?'':`<div class="bar" style="margin-top:12px">${t==='j'?`<button class="btn pri edit-only" data-act="newRh">${ic('plus')}${LM('rh',mid).some(enCurso)?'Registrar jornada':'Iniciar jornada'}</button>`:t==='s'?`<button class="btn pri edit-only" data-act="newRs">${ic('plus')}Registrar salida</button>`:`<button class="btn pri edit-only" data-act="newRc">${ic('plus')}Registrar tanqueo</button>`}</div>`;
  return `<h3 class="sech">Registros</h3><div class="card rgs">${tabs}<div class="rmeta">${head}</div>${body||'<div class="empty">Sin registros en el periodo.</div>'}${add}</div>`;
 }
 function jornadaDetalle(r){
- const P=S.retroP;const st=jst(r);const c=JC[st];
+ const P=mqById(mqOf(r));const st=jst(r);const c=JC[st];
  $('#sheet').classList.remove('wide');
  $('#sheet').innerHTML=`<div class="sh"><h2>${fdl(r.fecha)}</h2><button class="ib" data-act="close" aria-label="Cerrar">${ic('x')}</button></div><div class="sbd">
  <div><span class="pl" style="color:${c};border-color:${c}66;background:${c}1c">${({ok:'Meta cumplida',cerca:'Cerca del mínimo',bajo:'Bajo el mínimo',sin:'Sin operación',curso:'En curso'})[st]}</span>${r.obs?' <span class="pl nov">Novedad</span>':''}</div>
@@ -829,40 +854,43 @@ function jornadaDetalle(r){
  $('#modal').hidden=false;
 }
 SPV.rres=()=>{
- const P=S.retroP;const {f,lc}=retroPeriodo();const R=retroCalc(f,'');
- const cuts=L('rcort').slice().sort((a,b)=>a.fecha.localeCompare(b.fecha));
- let prev='';const hist=cuts.map(c=>{const r=retroCalc(prev?addDays(prev,1):'',c.fecha);const o={c,r,desde:prev?addDays(prev,1):''};prev=c.fecha;return o}).reverse();
- return `<div class="card"><div class="split"><div><h3 style="margin:0 0 4px">${esc(P.maq)} · Dueño ${esc(P.dueno)}</h3><div class="mut" style="font-size:13px">Periodo actual ${lc?'desde '+fd(addDays(lc,1)):'desde el primer registro'}</div></div>
- <div class="bar"><button class="btn sm gh edit-only" data-act="retroP">${ic('gear')}Parámetros</button><button class="btn sm gh" data-act="go" data-m="retro" data-s="dueno">${ic('eye')}Vista del dueño</button><button class="btn sm pri edit-only" data-act="retroCorte">Cerrar liquidación</button></div></div></div>
+ const P=curMq();const mid=P.id;const {f,lc}=retroPeriodo(mid);const R=retroCalc(f,'',mid);
+ const cuts=LM('rcort',mid).slice().sort((a,b)=>a.fecha.localeCompare(b.fecha));
+ let prev='';const hist=cuts.map(c=>{const r=retroCalc(prev?addDays(prev,1):'',c.fecha,mid);const o={c,r,desde:prev?addDays(prev,1):''};prev=c.fecha;return o}).reverse();
+ const all=mqList().length>1?retroCalc(f,''):null;
+ return `${mqSel(false)}${all?`<div class="grid k4">${kpi('Toda la maquinaria · horas',fg(all.horas)+' h',mqList().length+' máquinas','c-cy')}${kpi('Neto por pagar a dueños',fmt(all.neto),'Periodos abiertos','c-go','gold')}${kpi('Costo total para la mina',fmt(all.costoMina),'Todas las máquinas','c-ba')}</div>`:''}
+ <div class="card"><div class="split"><div><h3 style="margin:0 0 4px">${esc(P.maq)}${propia(P)?' · Propia':P.dueno?' · Dueño '+esc(P.dueno):''}</h3><div class="mut" style="font-size:13px">Periodo actual ${lc?'desde '+fd(addDays(lc,1)):'desde el primer registro'}</div></div>
+ <div class="bar"><button class="btn sm gh" data-act="go" data-m="retro" data-s="dueno">${ic('eye')}Vista del dueño</button>${propia(P)?'':`<button class="btn sm pri edit-only" data-act="retroCorte">Cerrar liquidación</button>`}</div></div></div>
  ${retroKpis(R,false)}
- <h3 class="sech">Rendimiento diario</h3><div class="card">${hoursChart(R.h)}</div>
+ <h3 class="sech">Rendimiento diario</h3><div class="card">${hoursChart(R.h,P)}</div>
  ${registros(f,false)}
  <div class="card"><h3>Liquidaciones cerradas</h3>${hist.length?`<div class="tw"><table class="t"><thead><tr><th>Corte</th><th class="n">Horas</th><th class="n">Neto dueño</th><th></th></tr></thead><tbody>${hist.map(o=>`<tr class="rw"><td class="num">${fd(o.c.fecha)}${o.c.obs?`<div class="mut" style="font-size:12px">${esc(o.c.obs)}</div>`:''}</td><td class="n">${fg(o.r.horas)}</td><td class="n">${fmt(o.r.neto)}</td>${rowActs('rcort',o.c.id)}</tr>`).join('')}</tbody></table></div>`:'<div class="empty">Sin liquidaciones cerradas. Al pagarle al dueño, toca “Cerrar liquidación”.</div>'}</div>`;
 };
 SPV.rdue=()=>{
- const P=S.retroP;const {f,lc}=retroPeriodo();const R=retroCalc(f,'');
- return `<div class="card" style="background:linear-gradient(120deg,#1a2a7a,#16205e 60%,#1b1a63)"><div class="split"><div><div class="mut" style="font:600 11px var(--f-disp);letter-spacing:.14em;text-transform:uppercase">Seguimiento de la máquina</div><div style="font:700 24px var(--f-disp);letter-spacing:.03em">${esc(P.maq)}</div><div class="mut">Dueño ${esc(P.dueno)} · Periodo ${lc?'desde '+fd(addDays(lc,1)):'actual'}</div></div><div style="text-align:right"><div class="mut" style="font:600 11px var(--f-disp);letter-spacing:.14em;text-transform:uppercase">Neto a pagar</div><div class="gold" style="font:700 30px var(--f-disp)">${fmt(R.neto)}</div></div></div></div>
+ if(S.cfg.role==='dueno'&&!L('maq').length&&!L('rh').length)return `<div class="card"><div class="empty">Aún no tienes máquinas asignadas. Sincroniza en Ajustes o pide al administrador que te asigne tu máquina.</div></div>`;
+ const P=curMq();const mid=P.id;const {f,lc}=retroPeriodo(mid);const R=retroCalc(f,'',mid);
+ return `${mqSel(true)}<div class="card mqhc" style="background:linear-gradient(120deg,#1a2a7a,#16205e 60%,#1b1a63)">${P.foto?`<button class="hero mqh" data-act="mqFoto" data-id="${P.id}" aria-label="Ver foto de ${esc(P.maq)}">${mqImg(P)}</button>`:''}<div class="split"><div><div class="mut" style="font:600 11px var(--f-disp);letter-spacing:.14em;text-transform:uppercase">Seguimiento de la máquina</div><div style="font:700 24px var(--f-disp);letter-spacing:.03em">${esc(P.maq)}</div><div class="mut">${esc(mqSub(P))} · Periodo ${lc?'desde '+fd(addDays(lc,1)):'actual'}</div></div>${propia(P)?'':`<div style="text-align:right"><div class="mut" style="font:600 11px var(--f-disp);letter-spacing:.14em;text-transform:uppercase">Neto a pagar</div><div class="gold" style="font:700 30px var(--f-disp)">${fmt(R.neto)}</div></div>`}</div></div>
  ${retroKpis(R,true)}
- <h3 class="sech">Rendimiento diario</h3><div class="card">${hoursChart(R.h)}</div>
+ <h3 class="sech">Rendimiento diario</h3><div class="card">${hoursChart(R.h,P)}</div>
  ${registros(f,true)}`;
 };
 SPV.rh=()=>{
- const P=S.retroP;let rows=L('rh').slice().sort((a,b)=>b.fecha.localeCompare(a.fecha));
- return `<div class="card">${toolbar(`<button class="btn pri edit-only" data-act="newRh">${ic('plus')}Registrar día</button>`,false)}<div style="height:10px"></div>
+ const P=curMq();let rows=LM('rh',P.id).slice().sort((a,b)=>b.fecha.localeCompare(a.fecha));
+ return `${mqSel(false)}<div class="card">${toolbar(`<button class="btn pri edit-only" data-act="newRh">${ic('plus')}Registrar día</button>`,false)}<div style="height:10px"></div>
  <div class="tw"><table class="t cards"><thead><tr><th>Fecha</th><th class="n">Horómetro inicio</th><th class="n">Horómetro final</th><th class="n">Horas</th><th class="n">Valor día</th><th>Operador</th><th>Novedad</th><th></th></tr></thead><tbody>
  ${rows.filter(r=>!V.q||[r.obs,r.operador].join(' ').toLowerCase().includes(V.q.toLowerCase())).map(r=>`<tr class="rw"><td class="p num">${fd(r.fecha)}</td><td data-l="Inicio" class="n">${fg(r.hi)}</td><td data-l="Final" class="n">${enCurso(r)?'…':fg(r.hf)}</td><td class="n ${r.horas>0&&r.horas<P.min?'neg':''}">${enCurso(r)?'<span class="pl" style="color:#8b7bff;border-color:#8b7bff66">En curso</span>':fg(r.horas)+' h'}</td><td data-l="Valor" class="n">${enCurso(r)?'—':fmt(r.horas*P.precio)}</td><td data-l="Operador">${esc(r.operador||'')}</td><td data-l="Novedad">${esc(r.obs||'')}</td>${rowActs('rh',r.id,photoBtn(r))}</tr>`).join('')}
  </tbody><tfoot><tr><td colspan="3">${rows.length} días</td><td class="n">${fg(sum(rows,r=>r.horas))} h</td><td class="n">${fmt(sum(rows,r=>r.horas)*P.precio)}</td><td colspan="3"></td></tr></tfoot></table></div></div>`;
 };
 SPV.rs=()=>{
- const rows=L('rs').slice().sort((a,b)=>b.fecha.localeCompare(a.fecha)).filter(r=>!V.q||r.concepto.toLowerCase().includes(V.q.toLowerCase()));
- return `<div class="grid k4">${kpi('Asume el dueño',fmt(sum(rows.filter(r=>r.asume!=='Mina'))),'Se descuenta de la renta','c-wa')}${kpi('Asume la mina',fmt(sum(rows.filter(r=>r.asume==='Mina'))),'Costo de la mina','c-ba')}</div>
+ const rows=LM('rs',curMq().id).slice().sort((a,b)=>b.fecha.localeCompare(a.fecha)).filter(r=>!V.q||r.concepto.toLowerCase().includes(V.q.toLowerCase()));
+ return `${mqSel(false)}<div class="grid k4">${kpi('Asume el dueño',fmt(sum(rows.filter(r=>r.asume!=='Mina'))),'Se descuenta de la renta','c-wa')}${kpi('Asume la mina',fmt(sum(rows.filter(r=>r.asume==='Mina'))),'Costo de la mina','c-ba')}</div>
  <div class="card">${toolbar(`<button class="btn pri edit-only" data-act="newRs">${ic('plus')}Registrar salida</button>`,false)}<div style="height:10px"></div><div class="tw"><table class="t cards"><thead><tr><th>Fecha</th><th>Tipo</th><th>Concepto</th><th>Asume</th><th class="n">Valor</th><th></th></tr></thead><tbody>
  ${rows.map(r=>`<tr class="rw"><td class="num" data-l="Fecha">${fd(r.fecha)}</td><td data-l="Tipo">${esc(r.tipo)}</td><td class="p">${esc(r.concepto)}</td><td data-l="Asume"><span class="tag ${r.asume==='Mina'?'ok':'wa'}">${esc(r.asume)}</span></td><td class="n">${fmt(r.valor)}</td>${rowActs('rs',r.id,photoBtn(r))}</tr>`).join('')}</tbody><tfoot><tr><td colspan="4">${rows.length} registros</td><td class="n">${fmt(sum(rows))}</td><td></td></tr></tfoot></table></div></div>`;
 };
 SPV.rc=()=>{
- const rows=L('rc').slice().sort((a,b)=>b.fecha.localeCompare(a.fecha));
+ const P=curMq();const rows=LM('rc',P.id).slice().sort((a,b)=>b.fecha.localeCompare(a.fecha));
  const gal=sum(rows.filter(r=>r.tipo==='ACPM'),r=>r.cant);
- return `<div class="grid k4">${kpi('Total combustible y aceites',fmt(sum(rows)),(100-(S.retroP.pctComb||0))+'% a cargo de la mina','c-vi')}${kpi('ACPM',fg(gal)+' gal',gal?fmt(sum(rows.filter(r=>r.tipo==='ACPM'))/gal)+' por galón':'','c-cy')}</div>
+ return `${mqSel(false)}<div class="grid k4">${kpi('Total combustible y aceites',fmt(sum(rows)),propia(P)?'Máquina propia':(100-(P.pctComb||0))+'% a cargo de la mina','c-vi')}${kpi('ACPM',fg(gal)+' gal',gal?fmt(sum(rows.filter(r=>r.tipo==='ACPM'))/gal)+' por galón':'','c-cy')}</div>
  <div class="card">${toolbar(`<button class="btn pri edit-only" data-act="newRc">${ic('plus')}Registrar tanqueo</button>`,false)}<div style="height:10px"></div><div class="tw"><table class="t cards"><thead><tr><th>Fecha</th><th>Tipo</th><th class="n">Cantidad</th><th class="n">Horómetro</th><th class="n">Valor</th><th></th></tr></thead><tbody>
  ${rows.map(r=>`<tr class="rw"><td class="num" data-l="Fecha">${fd(r.fecha)}</td><td class="p">${esc(r.tipo)}</td><td data-l="Cant." class="n">${fg(r.cant)} ${esc(r.und||'')}</td><td data-l="Horómetro" class="n">${r.horo?fg(r.horo):'—'}</td><td class="n">${fmt(r.valor)}</td>${rowActs('rc',r.id,photoBtn(r))}</tr>`).join('')}</tbody><tfoot><tr><td colspan="4">${rows.length} registros</td><td class="n">${fmt(sum(rows))}</td><td></td></tr></tfoot></table></div></div>`;
 };
@@ -913,7 +941,7 @@ function alerts(){
  const a=[];const t=today(),lim=addDays(t,30);
  L('obl').filter(o=>!o.done&&assetOf(o)&&!assetOf(o).del).sort((x,z)=>x.fecha.localeCompare(z.fecha)).forEach(o=>{const n=ASSET[o.ac].name(assetOf(o));if(o.fecha<t)a.push(['ba',`${n}: ${oblName(o)} vencido desde ${fd(o.fecha)}.`]);else if(o.fecha<=lim)a.push(['',`${n}: ${oblName(o)} vence el ${fd(o.fecha)}.`])});
  L('veh').forEach(v=>['SOAT','Revisión técnico-mecánica'].forEach(tp=>{const o=L('obl').find(o=>o.aid===v.id&&o.tipo===tp&&!o.done);if(!o||o.est)a.push(['',`${v.placa}: ${o?'confirma':'registra'} la fecha de ${tp==='SOAT'?'vencimiento del SOAT':'la revisión técnico-mecánica'} en la ficha del vehículo.`])}));
- const {f}=retroPeriodo();const R=retroCalc(f,'');if(R.bajo)a.push(['',`Retroexcavadora: ${R.bajo} días por debajo de ${S.retroP.min} horas en el periodo actual.`]);
+ mqList().filter(m=>!m.inactivo).forEach(m=>{const {f}=retroPeriodo(m.id);const R=retroCalc(f,'',m.id);if(R.bajo)a.push(['',`${m.maq}: ${R.bajo} días por debajo de ${fg(m.min)} horas en el periodo actual.`]);const op=LM('rh',m.id).filter(enCurso);if(op.length&&op[0].fecha<addDays(today(),-1))a.push(['',`${m.maq}: la jornada del ${fd(op[0].fecha)} sigue en curso. Ciérrala con el horómetro final.`])});
  const ant=sum(L('per').filter(p=>p.sc==='mina'),p=>anticiposPend(p.id));if(ant)a.push(['',`Mina: ${fmt(ant)} en anticipos por descontar en el próximo corte.`]);
  const pend=minaPendiente();if(pend)a.push(['ba',`Mina: ${fmt(pend)} en costos aún sin cubrir con cortes de oro.`]);
  L('inm').forEach(i=>{const ej=sum(L('mov').filter(r=>r.p==='inm'&&r.inm===i.id));if(i.pres&&ej>i.pres*.9)a.push([ej>i.pres?'ba':'',`${i.nombre}: ejecutado ${(ej/i.pres*100).toFixed(0)}% del presupuesto.`])});
@@ -928,14 +956,14 @@ function superCards(R){
  const inms=R.rows.filter(r=>String(r.id).startsWith('inm:'));const inmE=sum(inms,r=>r.egr);
  const inmSub=inms.length===1&&inms[0].pres?`${esc(inms[0].name)}: ${Math.round(sum(L('mov').filter(r=>r.p==='inm'&&r.inm===inms[0].id.slice(4)),r=>r.valor)/inms[0].pres*100)}% del presupuesto`:`${inms.length} propiedad${inms.length===1?'':'es'} · este mes ${fmt(mesDe('inm'))}`;
  const prs=L('prest').filter(p=>saldoPrest(p)>0);
- const {f}=retroPeriodo();const RA=retroCalc(f,'');const RY=mn.retro;
+ const RA=sum(mqList(),m=>retroCalc(retroPeriodo(m.id).f,'',m.id).neto);const RY=mn.retro;const nMq=mqList().filter(m=>!m.inactivo).length;
  return `<div class="grid supg">
  ${card('mina','cortes','gem','#24d6a5','Ingresos por oro',fmt(R.T.ing),`${mn.cortes} corte${mn.cortes===1?'':'s'} en ${y}${mn.oroG?' · '+fg(mn.oroG)+' g':''}`,'pos')}
  ${card('personal','','user',PCOL.personal,'Gastos personales',fmt(per.egr),`En ${y} · este mes ${fmt(mesDe('personal'))}`)}
  ${card('prestamos','','coin','#f2c75c','Préstamos por cobrar',fmt(R.pr.saldo),`${prs.length} préstamo${prs.length===1?'':'s'} con saldo`,'gold')}
  ${card('parcela','','leaf',PCOL.parcela,'Parcela Las Colinas',fmt(par.egr),`En ${y} · este mes ${fmt(mesDe('parcela'))}`)}
  ${card('inm','','bld',PCOL.inm,'Inmuebles',fmt(inmE),inmSub)}
- ${card('retro','resumen','dig','#2ee6f0','Retroexcavadora',fmt(RY.costoMina),`Costo para la mina en ${y} · neto al dueño ${fmt(RA.neto)}`)}
+ ${card('retro','resumen','dig','#2ee6f0','Maquinaria',fmt(RY.costoMina),`${nMq} máquina${nMq===1?'':'s'} · costo en ${y} · por pagar a dueños ${fmt(RA)}`)}
  ${card('mina','','gem',PCOL.mina,'Mina La Fe',fmt(mn.cos+mn.inv),`Costos e inversiones en ${y} · por cubrir ${fmt(minaPendiente())}`)}
  </div>`;
 }
@@ -955,6 +983,8 @@ function vInicio(){
 }
 
 /* Ajustes */
+function ownersCard(){const os=L('own');return `<div class="card"><h3>Dueños de maquinaria<span class="r"><button class="btn sm edit-only" data-act="newOwn">${ic('plus')}Nuevo dueño</button></span></h3><p class="note" style="margin:0 0 12px">Cada dueño tiene su propia clave y en su app solo ve sus máquinas, sin poder modificar nada.</p>${os.length?`<div class="tw"><table class="t cards"><thead><tr><th>Dueño</th><th>Máquinas</th><th>Celular</th><th></th></tr></thead><tbody>${os.map(o=>`<tr class="rw"><td class="p">${esc(o.nombre)}</td><td data-l="Máquinas">${esc(L('maq').filter(m=>m.own===o.id).map(m=>m.maq).join(', ')||'—')}</td><td data-l="Celular">${esc(o.tel||'—')}</td>${rowActs('own',o.id,S.cfg.tokRole==='admin'?`<button class="ib" data-act="ownKey" data-id="${o.id}" title="Clave de acceso" aria-label="Clave de acceso de ${esc(o.nombre)}">${ic('lock')}</button>`:'')}</tr>`).join('')}</tbody></table></div>`:'<div class="empty">Sin dueños registrados.</div>'}</div>`}
+/* Ajustes */
 function vAjustes(){
  const c=S.cfg;const pend=S.outbox.length;const lim=['dueno','conta'].includes(c.role);
  return `<div class="grid two"><div class="card"><h3>Perfil de este equipo</h3><div class="fg">
@@ -969,6 +999,7 @@ function vAjustes(){
  ${lim?`<div class="card"><h3>Instalar en este dispositivo</h3>${isStandalone()?'<div class="al ok"><i></i><div>La app está instalada y funciona sin internet en este equipo.</div></div>':'<p class="note" style="margin:0">iPhone: Safari → Compartir → Agregar a pantalla de inicio. Android: Chrome → ⋮ → Instalar aplicación. PC: Chrome o Edge → ícono de instalar en la barra de direcciones.</p>'}</div>`:`<div class="grid k3"><div class="card"><h3>Respaldo</h3><div class="bar"><button class="btn" data-act="backup">${ic('dl')}Exportar respaldo</button><label class="btn" for="restore">${ic('sync')}Restaurar respaldo</label><input type="file" id="restore" accept="application/json" hidden></div><p class="note" style="margin:12px 0 0">Datos importados del Sheet “Control Financiero PROYECTOS” el ${fd(c.imported)}: Mina La Fe, Villa Suárez, Gastos Personales, Retroexcavadora y Nómina.</p></div>
  <div class="card"><h3>Instalar en este dispositivo</h3>${isStandalone()?'<div class="al ok"><i></i><div>La app está instalada y funciona sin internet en este equipo.</div></div>':`${INSTALL?`<div class="bar"><button class="btn pri" data-act="install">${ic('dl')}Instalar app</button></div>`:''}<div class="kv" style="margin-top:10px;grid-template-columns:auto 1fr"><span>iPhone / iPad</span><span style="text-align:left;font-family:var(--f-body)">Abrir en Safari → Compartir → Agregar a pantalla de inicio</span><span>Android</span><span style="text-align:left;font-family:var(--f-body)">Chrome → menú ⋮ → Instalar aplicación</span><span>PC</span><span style="text-align:left;font-family:var(--f-body)">Chrome o Edge → ícono de instalar en la barra de direcciones</span></div>`}</div>
  <div class="card"><h3>Mina La Fe</h3><div class="fg"><div class="fld"><label for="presM">Presupuesto de la mina</label><input id="presM" inputmode="numeric" data-money value="${(c.presMina||0).toLocaleString('es-CO')}"></div></div><div class="bar" style="margin-top:12px"><button class="btn pri" data-act="savePres">Guardar</button><button class="btn dan del-only" data-act="reset">Restablecer datos</button></div></div></div>
+ ${S.cfg.role==='admin'?ownersCard():''}
  <div class="card"><h3>Categorías personalizadas<span class="r"><button class="btn sm edit-only" data-act="newCat">${ic('plus')}Nueva categoría</button></span></h3>
  <p class="note" style="margin:0 0 12px">Cada categoría nueva queda clasificada como gasto, costo o inversión según el rubro, para que los informes al contador sigan cuadrando.</p>
  ${L('cats').length?`<div class="tw"><table class="t cards"><thead><tr><th>Rubro</th><th>Categoría</th><th>Clasificación</th><th class="n">Registros</th><th></th></tr></thead><tbody>${L('cats').map(c=>{const [m,sb]=c.key.split('.');const n=L('mov').filter(r=>r.p===m&&r.s===sb&&r.cat===c.name).length;return `<tr class="rw"><td data-l="Rubro">${esc(modOf(m)?.name||m)} › ${esc(subOf(m,sb)?.name||sb)}</td><td class="p">${esc(c.name)}</td><td>${tagN(c.nat)}</td><td class="n" data-l="Registros">${n}</td><td class="acts">${n?'<span class="mut" style="font-size:12px">En uso</span>':`<button class="ib dan del-only" data-act="delCat" data-id="${c.id}" title="Eliminar">${ic('trash')}</button>`}</td></tr>`}).join('')}</tbody></table></div>`:'<div class="empty">Aún no hay categorías personalizadas. Créalas desde aquí o con “+ Categoría” en cada rubro.</div>'}</div>`}`;
@@ -1107,19 +1138,48 @@ function formAbono(prestId,rec={}){
  save:v=>{const p=byId('prest',v.prest);const sal=p?saldoPrest(p)+(rec.valor||0):0;if(v.valor>sal+1){toast(`El abono supera el saldo del préstamo (${fmt(sal)})`);return false}upsert('abonos',Object.assign({id:rec.id},v));return 'Abono registrado'}});
 }
 function formRh(rec={}){
- const last=L('rh').filter(r=>!enCurso(r)).sort((a,b)=>a.fecha.localeCompare(b.fecha)).pop();const closing=rec.id&&enCurso(rec);
- openForm({title:closing?'Cerrar jornada · '+fdl(rec.fecha):rec.id?'Editar jornada':'Registrar jornada',rec,preview:true,
+ const mid=rec.id?mqOf(rec):curMq().id;const P=mqById(mid);
+ const last=LM('rh',mid).filter(r=>!enCurso(r)).sort((a,b)=>a.fecha.localeCompare(b.fecha)).pop();const closing=rec.id&&enCurso(rec);
+ openForm({title:(closing?'Cerrar jornada · '+fdl(rec.fecha):rec.id?'Editar jornada':'Registrar jornada')+(mqList().length>1?' · '+P.maq:''),rec,preview:true,
  top:rec.id?'':'<div class="note">Si la máquina sigue trabajando, deja vacío el horómetro final: la jornada queda “En curso” y la cierras después.</div>',
  fields:[{k:'fecha',l:'Fecha',t:'date',v:rec.fecha||today(),req:1},{k:'operador',l:'Operador',v:rec.operador||last?.operador||''},{k:'hi',l:'Horómetro inicio',t:'dec',v:rec.hi??last?.hf??''},{k:'hf',l:'Horómetro final',t:'dec',v:rec.hf??'',ph:'Vacío = en curso'},{k:'obs',l:'Novedad',w:1,v:rec.obs,ph:'Ej. daño, festivo, lluvia'},{k:'foto',l:'Foto horómetro inicio',t:'photo',img:1},{k:'foto2',l:'Foto horómetro final',t:'photo',img:1}],
- onInput:v=>{const open=$('#f_hf')&&$('#f_hf').value.trim()==='';const h=Math.max(0,v.hf-v.hi);$('#prev').innerHTML=open?`<span class="pl" style="color:#8b7bff;border-color:#8b7bff66">En curso</span> <span class="mut">Se guarda sin horas; ciérrala con el horómetro final.</span>`:`<div class="kv"><span>Horas</span><span class="${h&&h<S.retroP.min?'neg':''}">${fg(h)} h</span><span>Valor del día</span><span>${fmt(h*S.retroP.precio)}</span></div>`},
+ onInput:v=>{const open=$('#f_hf')&&$('#f_hf').value.trim()==='';const h=Math.max(0,v.hf-v.hi);$('#prev').innerHTML=open?`<span class="pl" style="color:#8b7bff;border-color:#8b7bff66">En curso</span> <span class="mut">Se guarda sin horas; ciérrala con el horómetro final.</span>`:`<div class="kv"><span>Horas</span><span class="${h&&h<P.min?'neg':''}">${fg(h)} h</span>${propia(P)?'':`<span>Valor del día</span><span>${fmt(h*P.precio)}</span>`}</div>`},
  save:v=>{const open=$('#f_hf').value.trim()==='';if($('#f_hi').value.trim()===''){toast('Falta el horómetro de inicio');return false}
   if(open){v.hf='';v.horas=0}else{if(v.hf<v.hi){toast('El horómetro final es menor que el inicial');return false}v.horas=Math.round((v.hf-v.hi)*100)/100}
-  if(!rec.id&&open&&L('rh').some(r=>enCurso(r))){toast('Ya hay una jornada en curso. Ciérrala antes de iniciar otra.');return false}
-  upsert('rh',Object.assign({id:rec.id},v));return open?'Jornada iniciada':closing?'Jornada cerrada':'Jornada registrada'}});
+  if(!rec.id&&open&&LM('rh',mid).some(r=>enCurso(r))){toast('Ya hay una jornada en curso. Ciérrala antes de iniciar otra.');return false}
+  v.mq=mid;upsert('rh',Object.assign({id:rec.id},v));return open?'Jornada iniciada':closing?'Jornada cerrada':'Jornada registrada'}});
 }
-function formRs(rec={}){openForm({title:rec.id?'Editar salida':'Repuesto o reparación',rec,fields:[{k:'fecha',l:'Fecha',t:'date',v:rec.fecha||today(),req:1},{k:'tipo',l:'Tipo',t:'select',opts:['Repuesto','Reparación','Salario','Otro'],v:rec.tipo||'Repuesto'},{k:'concepto',l:'Concepto',v:rec.concepto,req:1,w:1},{k:'valor',l:'Valor',t:'money',v:rec.valor??'',req:1},{k:'asume',l:'Lo asume',t:'select',opts:['Dueño','Mina'],v:rec.asume||'Dueño',hint:'Dueño: se descuenta de la renta. Mina: costo de la mina.'},{k:'foto',l:'Soporte',t:'photo',w:1}],save:v=>{upsert('rs',Object.assign({id:rec.id},v));return 'Salida registrada'}})}
-function formRc(rec={}){openForm({title:rec.id?'Editar tanqueo':'Combustible o aceite',rec,fields:[{k:'fecha',l:'Fecha',t:'date',v:rec.fecha||today(),req:1},{k:'tipo',l:'Tipo',t:'select',opts:['ACPM','Gasolina','Aceite','Grasa','Otro'],v:rec.tipo||'ACPM'},{k:'cant',l:'Cantidad',t:'dec',v:rec.cant??''},{k:'und',l:'Unidad',t:'select',opts:['gal','lt','und'],v:rec.und||'gal'},{k:'valor',l:'Valor',t:'money',v:rec.valor??'',req:1},{k:'horo',l:'Horómetro',t:'dec',v:rec.horo??''},{k:'foto',l:'Soporte',t:'photo',w:1}],save:v=>{upsert('rc',Object.assign({id:rec.id},v));return 'Tanqueo registrado'}})}
+function formRs(rec={}){const P=mqById(rec.id?mqOf(rec):curMq().id);openForm({title:(rec.id?'Editar salida':'Repuesto o reparación')+(mqList().length>1?' · '+P.maq:''),rec,fields:[{k:'fecha',l:'Fecha',t:'date',v:rec.fecha||today(),req:1},{k:'tipo',l:'Tipo',t:'select',opts:['Repuesto','Reparación','Salario','Otro'],v:rec.tipo||'Repuesto'},{k:'concepto',l:'Concepto',v:rec.concepto,req:1,w:1},{k:'valor',l:'Valor',t:'money',v:rec.valor??'',req:1},{k:'asume',l:'Lo asume',t:'select',opts:['Dueño','Mina'],v:rec.asume||(propia(P)?'Mina':'Dueño'),hint:'Dueño: se descuenta de la renta. Mina: costo de la mina.'},{k:'foto',l:'Soporte',t:'photo',w:1}],save:v=>{v.mq=rec.id?mqOf(rec):curMq().id;upsert('rs',Object.assign({id:rec.id},v));return 'Salida registrada'}})}
+function formRc(rec={}){const P=mqById(rec.id?mqOf(rec):curMq().id);openForm({title:(rec.id?'Editar tanqueo':'Combustible o aceite')+(mqList().length>1?' · '+P.maq:''),rec,fields:[{k:'fecha',l:'Fecha',t:'date',v:rec.fecha||today(),req:1},{k:'tipo',l:'Tipo',t:'select',opts:['ACPM','Gasolina','Aceite','Grasa','Otro'],v:rec.tipo||'ACPM'},{k:'cant',l:'Cantidad',t:'dec',v:rec.cant??''},{k:'und',l:'Unidad',t:'select',opts:['gal','lt','und'],v:rec.und||'gal'},{k:'valor',l:'Valor',t:'money',v:rec.valor??'',req:1},{k:'horo',l:'Horómetro',t:'dec',v:rec.horo??''},{k:'foto',l:'Soporte',t:'photo',w:1}],save:v=>{v.mq=rec.id?mqOf(rec):curMq().id;upsert('rc',Object.assign({id:rec.id},v));return 'Tanqueo registrado'}})}
 const planField=c=>({k:'plan',l:'Recordatorios sugeridos',t:'checks',opts:PLAN_OPTS[c].map(x=>[x,x]),v:PLAN_OPTS[c],w:1,hint:'Se crean con fechas y periodicidad recomendadas. Los ajustas después en la ficha.'});
+function formMaq(rec={}){const nw=!rec.id;
+ const owners=L('own').slice().sort((a,b)=>String(a.nombre).localeCompare(String(b.nombre)));
+ const f=[{k:'maq',l:'Nombre o modelo',v:rec.maq,req:1,ph:'Ej. CATERPILLAR 320'},{k:'tipo',l:'Tipo',t:'select',opts:MQTIPOS,v:rec.tipo||'Retroexcavadora'},{k:'prop',l:'Propiedad',t:'select',opts:[['Tercero','De un tercero (se le paga renta)'],['Propia','Propia (sin renta)']],v:rec.prop||'Tercero',w:1},
+  {k:'own',l:'Dueño',t:'select',opts:[['','— Sin dueño asignado —'],...owners.map(o=>[o.id,o.nombre]),['__new','+ Nuevo dueño']],v:rec.own||''},{k:'ownN',l:'Nombre del nuevo dueño',ph:'Solo si elegiste “Nuevo dueño”'},{k:'ownT',l:'Celular del nuevo dueño',t:'tel'},
+  {k:'precio',l:'Precio por hora',t:'money',v:rec.precio||'',hint:'Solo aplica a máquinas de terceros.'},{k:'min',l:'Horas mínimas por día',t:'dec',v:rec.min??7},{k:'alerta',l:'% alerta amarilla',t:'dec',v:rec.alerta??80},{k:'pctComb',l:'% del combustible que asume el dueño',t:'dec',v:rec.pctComb??0,hint:'0% = la mina asume el 100%.'},
+  {k:'serie',l:'Placa o serie',v:rec.serie},{k:'inactivo',l:'Estado',t:'select',opts:[['','Activa'],['1','Inactiva (vendida o retirada)']],v:rec.inactivo?'1':''},{k:'foto',l:'Foto de la máquina',t:'photo',img:1,w:1}];
+ openForm({title:nw?'Nueva máquina':'Editar máquina',rec,fields:f,save:v=>{
+  if(v.prop==='Propia'){v.own='';v.precio=0;v.pctComb=0}
+  if(v.own==='__new'){const n=String(v.ownN||'').trim();if(!n){toast('Escribe el nombre del nuevo dueño');return false}const ex=L('own').find(o=>o.nombre.trim().toLowerCase()===n.toLowerCase());v.own=ex?ex.id:upsert('own',{nombre:n,tel:v.ownT||'',cedula:''}).id}
+  if(v.prop!=='Propia'&&!(v.precio>0)){toast('Falta el precio por hora');return false}
+  delete v.ownN;delete v.ownT;v.inactivo=v.inactivo==='1';v.dueno=v.own?(byId('own',v.own)?.nombre||''):'';
+  const r=upsert('maq',Object.assign({id:rec.id},v));V.mq=r.id;return nw?'Máquina agregada':'Máquina guardada'}});
+}
+function formOwn(rec={}){openForm({title:rec.id?'Editar dueño':'Nuevo dueño de maquinaria',rec,fields:[{k:'nombre',l:'Nombre',v:rec.nombre,req:1,w:1},{k:'tel',l:'Celular',t:'tel',v:rec.tel},{k:'cedula',l:'Cédula / NIT',v:rec.cedula}],save:v=>{const r=upsert('own',Object.assign({id:rec.id},v));L('maq').filter(m=>m.own===r.id&&m.dueno!==r.nombre).forEach(m=>upsert('maq',{id:m.id,dueno:r.nombre}));return 'Dueño guardado'}})}
+async function ownKey(id,reset){
+ const o=byId('own',id);if(!o){toast('Dueño no encontrado');return}
+ if(!S.cfg.url||S.cfg.tokRole!=='admin'){toast('Conecta la app con la clave de administrador para ver las claves');return}
+ if(!navigator.onLine){toast('Se necesita internet para consultar la clave');return}
+ toast('Consultando clave…');let j;try{if(S.outbox.length)await sync(false);j=await api('ownerKey',{own:id,reset:!!reset})}catch(e){toast(e.message);return}
+ const maqs=L('maq').filter(m=>m.own===id).map(m=>m.maq);
+ const msg=`Hola ${o.nombre}. Para ver ${maqs.length>1?'tus máquinas':'tu máquina'} (${maqs.join(', ')}) en el Tablero Financiero:\n1. Abre ${location.href.split('#')[0]}\n2. Ajustes → Sincronización con Google Drive\n3. Enlace: ${S.cfg.url}\n4. Clave: ${j.key}\n5. Guardar y conectar.`;
+ $('#sheet').classList.remove('wide');
+ $('#sheet').innerHTML=`<div class="sh"><h2>Clave de ${esc(o.nombre)}</h2><button class="ib" data-act="close" aria-label="Cerrar">${ic('x')}</button></div><div class="sbd">
+ <div class="kv"><span>Clave</span><span class="gold" style="user-select:all">${esc(j.key)}</span><span>Ve</span><span>${esc(maqs.join(', ')||'Ninguna máquina asignada')}</span></div>
+ <p class="note">Con esta clave el dueño solo ve sus máquinas, sin poder modificar nada. Si la clave se filtra, genera una nueva: la anterior deja de funcionar.</p>
+ <div class="bar"><button class="btn pri" data-act="copyKey">${ic('copy')}Copiar mensaje</button><a class="btn" target="_blank" rel="noopener" href="https://wa.me/${String(o.tel||'').replace(/\D/g,'').replace(/^(3\d{9})$/,'57$1')}?text=${encodeURIComponent(msg)}">WhatsApp</a><button class="btn gh" data-act="ownKeyNew" data-id="${id}">Generar clave nueva</button></div></div>`;
+ $('#modal').hidden=false;window.__KEYMSG=msg;
+}
 function formVeh(rec={}){const nw=!rec.id;
  const f=[{k:'placa',l:'Placa',v:rec.placa,req:1},{k:'tipoV',l:'Tipo',t:'select',opts:['Automóvil','Camioneta','Moto','Camión o volqueta','Otro'],v:rec.tipoV||'Automóvil'},{k:'desc',l:'Marca y modelo',v:rec.desc,ph:'Ej. Toyota Hilux'},{k:'anio',l:'Año del modelo',v:rec.anio,ph:'Ej. 2022',t:'tel'},{k:'servicio',l:'Servicio',t:'select',opts:['Particular','Público'],v:rec.servicio||'Particular'},{k:'matricula',l:'Fecha de matrícula',t:'date',v:rec.matricula,hint:'Sirve para calcular la revisión técnico-mecánica.'},{k:'foto',l:'Foto del vehículo',t:'photo',img:1,w:1}];
  if(nw)f.push({k:'soatV',l:'SOAT vence (si lo sabes)',t:'date'},{k:'trV',l:'Todo riesgo vence',t:'date'},{k:'tecnoV',l:'Tecnomecánica vence',t:'date'},planField('veh'));
@@ -1198,6 +1258,12 @@ const ACT={
  newCat:d=>formCat(d.m,d.s),
  tras:d=>formTras([d.id]),
  rtab:d=>{V.f.rtab=d.v;render()},
+ mqSel:d=>{V.mq=d.id;render()},
+ newMaq:()=>formMaq(),newOwn:()=>formOwn(),
+ mqFoto:d=>{const m=byId('maq',d.id);if(m&&m.foto)ACT.foto({id:m.foto,drive:m.fotoDrive||''});else if(canEdit()&&m)formMaq(m);else if(canEdit())formMaq()},
+ ownKey:d=>ownKey(d.id,false),
+ ownKeyNew:d=>confirmBox('¿Generar una clave nueva?','La clave actual dejará de funcionar y el dueño tendrá que poner la nueva en su app.',()=>ownKey(d.id,true)),
+ copyKey:()=>copyText(window.__KEYMSG||''),
  jdet:d=>{const r=byId('rh',d.id);if(r)jornadaDetalle(r)},
  sdet:d=>{const r=byId(d.c,d.id);if(!r)return;const isS=d.c==='rs';$('#sheet').classList.remove('wide');$('#sheet').innerHTML=`<div class="sh"><h2>${esc(isS?r.concepto:r.tipo)}</h2><button class="ib" data-act="close" aria-label="Cerrar">${ic('x')}</button></div><div class="sbd"><div class="kv"><span>Fecha</span><span>${fdl(r.fecha)}</span>${isS?`<span>Tipo</span><span>${esc(r.tipo||'')}</span><span>Lo asume</span><span>${esc(r.asume||'Dueño')}</span>`:`<span>Cantidad</span><span>${fg(r.cant)} ${esc(r.und||'')}</span>${r.horo?`<span>Horómetro</span><span>${fg(r.horo)}</span>`:''}`}<span>Valor</span><span>${fmt(r.valor)}</span></div><div class="bar">${photoBtn(r)}</div></div>${canEdit()?`<div class="sft"><button class="btn gh" data-act="edit" data-c="${d.c}" data-id="${r.id}">${ic('edit')}Editar</button></div>`:''}`;$('#modal').hidden=false},
  trasSel:()=>formTras([...PICK]),
@@ -1222,11 +1288,12 @@ const ACT={
  close:()=>{const b=FORM?.back;closeModal();if(b)b()},
  edit:d=>{const r=byId(d.c,d.id);if(!r)return;
   if(d.c==='mov'){if(r.s==='nomina'&&r.per)return formNom(r.per,r);return formMov(r.p,r.s,r)}
-  ({prest:formPrest,rh:formRh,rs:formRs,rc:formRc,veh:formVeh,cab:formCab,inm:formInm,eq:formEq})[d.c]?.(r);
+  ({prest:formPrest,rh:formRh,rs:formRs,rc:formRc,veh:formVeh,cab:formCab,inm:formInm,eq:formEq,maq:formMaq,own:formOwn})[d.c]?.(r);
   if(d.c==='obl')formObl(r.ac,r.aid,r);
   if(d.c==='per')formPer(r.sc,r);if(d.c==='abonos')formAbono(r.prest,r);
   if(d.c==='rcort')openForm({title:'Editar liquidación',rec:r,fields:[{k:'fecha',l:'Fecha de corte',t:'date',v:r.fecha,req:1},{k:'obs',l:'Observaciones',t:'area',w:1,v:r.obs}],save:v=>{upsert('rcort',Object.assign({id:r.id},v));return 'Guardado'}})},
- del:d=>confirmBox('¿Eliminar este registro?','Se quitará de los informes. La eliminación se sincroniza con el Drive.',()=>{remove(d.c,d.id);if(ASSET[d.c])L('obl').filter(o=>o.ac===d.c&&o.aid===d.id).forEach(o=>remove('obl',o.id));if(d.c==='prest')L('abonos').filter(a=>a.prest===d.id).forEach(a=>remove('abonos',a.id));render();toast('Eliminado')}),
+ del:d=>{if(d.c==='maq'&&['rh','rs','rc'].some(c=>LM(c,d.id).length)){toast('La máquina tiene registros. Márcala como inactiva en lugar de eliminarla.');return}if(d.c==='own'&&L('maq').some(m=>m.own===d.id)){toast('Este dueño tiene máquinas asignadas.');return}ACT.del0(d)},
+ del0:d=>confirmBox('¿Eliminar este registro?','Se quitará de los informes. La eliminación se sincroniza con el Drive.',()=>{remove(d.c,d.id);if(ASSET[d.c])L('obl').filter(o=>o.ac===d.c&&o.aid===d.id).forEach(o=>remove('obl',o.id));if(d.c==='prest')L('abonos').filter(a=>a.prest===d.id).forEach(a=>remove('abonos',a.id));render();toast('Eliminado')}),
  foto:async d=>{let f=IMG[d.id]||await DB.get('files',d.id);if(!f&&d.drive){toast('Descargando soporte…');f=await fetchDrive(d.id,d.drive)}if(!f){toast(d.drive?'No se pudo descargar el soporte. Revisa la señal.':'El soporte no está en este equipo');return}$('#sheet').innerHTML=`<div class="sh"><h2>${esc(f.name)}</h2><button class="ib" data-act="close">${ic('x')}</button></div><div class="sbd viewer">${f.data.startsWith('data:image')?`<img src="${f.data}" alt="Soporte">`:`<p class="mut">Archivo PDF guardado. Se verá en el Drive tras sincronizar.</p>`}</div>`;$('#modal').hidden=false},
  estado:d=>{const p=byId('prest',d.id);const ab=L('abonos').filter(a=>a.prest===p.id).sort((a,b)=>a.fecha.localeCompare(b.fecha));let s=p.valor;
   $('#sheet').innerHTML=`<div class="sh"><h2>Estado de cuenta · ${esc(p.nombre)}</h2><button class="ib" data-act="close">${ic('x')}</button></div><div class="sbd"><div class="kv"><span>Cédula</span><span>${esc(p.cedula||'—')}</span><span>Fecha del préstamo</span><span>${fd(p.fecha)}</span><span>Valor</span><span>${fmt(p.valor)}</span>${p.interes?`<span>Interés</span><span>${p.interes}% mensual</span>`:''}${p.plazo?`<span>Pago acordado</span><span>${fd(p.plazo)}</span>`:''}</div>
@@ -1238,8 +1305,8 @@ const ACT={
  qq:d=>{closeModal();if(d.k==='prest')return formPrest();if(d.k==='abono')return formAbono();const sub=subOf(d.m,d.s);go(d.m,d.s);
   if(sub.sp==='cortes')formCorte();else if(sub.sp==='rh')formRh();else if(sub.sp==='rs')formRs();else if(sub.sp==='rc')formRc();else if(!sub.sp||['veh','cab','eqv'].includes(sub.sp))formMov(d.m,d.s,{},{veh:L('veh')[0]?.id,cab:L('cab')[0]?.id})},
  pct:()=>{const p=S.cfg.pct;openForm({title:'Porcentajes del corte',preview:true,fields:[{k:'ter',l:'Dueño del terreno %',t:'dec',v:p.ter},{k:'emp',l:'Empleados directos %',t:'dec',v:p.emp},{k:'com',l:'Comisionista %',t:'dec',v:p.com},{k:'adm',l:'Administrador %',t:'dec',v:p.adm}],onInput:v=>{$('#prev').innerHTML=`Dueño de la mina: <b class="pos">${fg(100-v.ter-v.emp-v.com-v.adm)}%</b>`},save:v=>{if([v.ter,v.emp,v.com,v.adm].some(x=>x<0)||v.ter+v.emp+v.com+v.adm>100){toast('Los porcentajes deben ser positivos y sumar máximo 100%');return false}S.cfg.pct=v;S.cfg.confUpd=Date.now();queue('cfgx','conf');save();return 'Porcentajes guardados'}})},
- retroP:()=>{const P=S.retroP;openForm({title:'Parámetros de la retroexcavadora',fields:[{k:'maq',l:'Máquina',v:P.maq,req:1},{k:'dueno',l:'Dueño',v:P.dueno},{k:'precio',l:'Precio por hora',t:'money',v:P.precio,req:1},{k:'min',l:'Horas mínimas por día',t:'dec',v:P.min},{k:'alerta',l:'% alerta amarilla',t:'dec',v:P.alerta},{k:'pctComb',l:'% del combustible que asume el dueño',t:'dec',v:P.pctComb,hint:'0% = la mina asume el 100%.'}],save:v=>{Object.assign(S.retroP,v);S.retroP.upd=Date.now();queue('cfgx','retroP');save();return 'Parámetros guardados'}})},
- retroCorte:()=>{const {f}=retroPeriodo();const R=retroCalc(f,'');openForm({title:'Cerrar liquidación del dueño',preview:true,fields:[{k:'fecha',l:'Fecha de corte',t:'date',v:today(),req:1},{k:'obs',l:'Observaciones',t:'area',w:1,ph:'Ej. pagado en efectivo'}],onInput:()=>{$('#prev').innerHTML=`<div class="kv"><span>Horas</span><span>${fg(R.horas)}</span><span>Renta</span><span>${fmt(R.renta)}</span><span>Repuestos del dueño</span><span>${fmt(-R.repD)}</span><span><b>Neto a pagar</b></span><span class="gold"><b>${fmt(R.neto)}</b></span></div>`},save:v=>{upsert('rcort',v);return 'Liquidación cerrada'}})},
+ retroP:()=>{const m=byId('maq',curMq().id);formMaq(m||{})},
+ retroCorte:()=>{const P=curMq();const {f}=retroPeriodo(P.id);const R=retroCalc(f,'',P.id);openForm({title:'Cerrar liquidación · '+P.maq,preview:true,fields:[{k:'fecha',l:'Fecha de corte',t:'date',v:today(),req:1},{k:'obs',l:'Observaciones',t:'area',w:1,ph:'Ej. pagado en efectivo'}],onInput:()=>{$('#prev').innerHTML=`<div class="kv"><span>Horas</span><span>${fg(R.horas)}</span><span>Renta</span><span>${fmt(R.renta)}</span><span>Repuestos del dueño</span><span>${fmt(-R.repD)}</span><span><b>Neto a pagar</b></span><span class="gold"><b>${fmt(R.neto)}</b></span></div>`},save:v=>{v.mq=P.id;upsert('rcort',v);return 'Liquidación cerrada'}})},
  rango:d=>{const [a,b]=rangoDe(d.v);V.f.rf=a;V.f.rt=b;V.f.rk=d.v;V.f.custom=0;render()},
  pushRep:async()=>{if(!navigator.onLine){toast('Sin señal: el informe se enviará en la próxima sincronización');return}toast('Enviando informe al Sheet…');try{await api('report',{data:buildReport()});S.cfg.lastReport=Date.now();save();toast('Informe actualizado en el Sheet')}catch(e){toast(e.message)}},
  copyRep:()=>copyText(reportText()),
@@ -1282,9 +1349,9 @@ async function exportXlsx(){
  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(R.M.slice().sort((a,b)=>a.fecha.localeCompare(b.fecha)).map(r=>({Fecha:fd(r.fecha),Proyecto:r.p==='inm'?inmN(r.inm):PNAME[r.p],Rubro:subOf(r.p,r.s)?.name||r.s,Clasificación:({gasto:'Gasto',costo:'Costo',inversion:'Inversión',anticipo:'Anticipo'})[r.nat]||r.nat,Categoría:r.cat,Concepto:r.concepto,'Inmueble arrendado':r.arrTipo?(r.arrTipo+(r.arrDesc?' · '+r.arrDesc:'')):'','Proveedor/beneficiario':r.tercero,Cédula:r.cedula||'',Valor:r.valor,'Forma de pago':r.pago,Responsable:r.resp||'',Soporte:r.fotoN||''}))),'Movimientos');
  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(L('prest').map(p=>({Fecha:fd(p.fecha),Nombre:p.nombre,Cédula:p.cedula,Valor:p.valor,Abonos:p.valor-saldoPrest(p),Saldo:saldoPrest(p),Nota:p.nota||''}))),'Préstamos');
  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(L('cortes').flatMap(c=>c.liq.map(l=>({Corte:fd(c.fecha),Gramos_corte:c.gramos,Precio_g:c.precio,Beneficiario:l.label,Nombre:l.nombre,Porcentaje:l.pct,Gramos:l.g,Valor:l.cop,Anticipos_desc:l.desc,Neto:l.neto})))),'Cortes oro');
- XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(L('rh').map(r=>({Fecha:fd(r.fecha),Inicio:r.hi,Final:r.hf,Horas:r.horas,Valor:r.horas*S.retroP.precio,Operador:r.operador,Novedad:r.obs}))),'Retro horas');
- XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(L('rs').map(r=>({Fecha:fd(r.fecha),Tipo:r.tipo,Concepto:r.concepto,Valor:r.valor,Asume:r.asume}))),'Retro salidas');
- XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(L('rc').map(r=>({Fecha:fd(r.fecha),Tipo:r.tipo,Cantidad:r.cant,Unidad:r.und,Valor:r.valor}))),'Retro combustible');
+ XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(L('rh').map(r=>{const P=mqById(mqOf(r));return {Máquina:P.maq,Fecha:fd(r.fecha),Inicio:r.hi,Final:r.hf,Horas:r.horas,Valor:propia(P)?0:r.horas*P.precio,Operador:r.operador,Novedad:r.obs}})),'Retro horas');
+ XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(L('rs').map(r=>({Máquina:mqById(mqOf(r)).maq,Fecha:fd(r.fecha),Tipo:r.tipo,Concepto:r.concepto,Valor:r.valor,Asume:r.asume}))),'Retro salidas');
+ XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(L('rc').map(r=>({Máquina:mqById(mqOf(r)).maq,Fecha:fd(r.fecha),Tipo:r.tipo,Cantidad:r.cant,Unidad:r.und,Valor:r.valor}))),'Retro combustible');
  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet([...L('veh').map(v=>({Clase:'Vehículo',Nombre:v.placa,Tipo:v.tipoV||'',Detalle:v.desc||'',Fecha:'',Valor:''})),...L('cab').map(c=>({Clase:'Caballo',Nombre:c.nombre,Tipo:c.raza||'',Detalle:c.jinete?'Jinete '+c.jinete:'',Fecha:fd(c.nac),Valor:''})),...L('inm').map(i=>({Clase:'Inmueble',Nombre:i.nombre,Tipo:i.tipo||'',Detalle:i.dir||'',Fecha:'',Valor:i.pres||''})),...L('eq').map(e=>({Clase:'Equipo mina',Nombre:e.nombre,Tipo:e.tipo||'',Detalle:[e.marca,e.serie].filter(Boolean).join(' '),Fecha:fd(e.fcompra),Valor:e.valor||''}))]),'Activos');
  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(L('obl').filter(o=>assetOf(o)&&!assetOf(o).del).map(o=>({Activo:ASSET[o.ac].name(assetOf(o)),Clase:ASSET[o.ac].t,Obligación:oblName(o),Vence:fd(o.fecha),'Cada (meses)':o.meses||'',Estado:o.done?'Cumplida':o.fecha<today()?'Vencida':'Vigente',Nota:o.nota||''}))),'Obligaciones');
  const out=XLSX.write(wb,{bookType:'xlsx',type:'array'});dl(new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),`informe-financiero-${f}-a-${t}.xlsx`);
@@ -1339,7 +1406,7 @@ function prevRange(f,t){if(!f||f<'2001')return null;const d=Math.round((new Date
 const pct=(a,b)=>b?((a-b)/Math.abs(b))*100:null;
 function delta(a,b,inverse){const p=pct(a,b);if(p===null||!isFinite(p))return '';const up=p>=0;const good=inverse?!up:up;return `<span class="dl ${Math.abs(p)<1?'':good?'up':'dn'}">${up?'▲':'▼'} ${Math.abs(p).toLocaleString('es-CO',{maximumFractionDigits:0})}%</span>`}
 function catBreak(R){const g={};R.M.filter(r=>r.nat!=='anticipo').forEach(r=>{const pn=r.p==='inm'?(byId('inm',r.inm)?.nombre||'Inmuebles'):PNAME[r.p];const k=[pn,subOf(r.p,r.s)?.name||r.s,r.cat||'Sin categoría',r.nat].join('|');g[k]=(g[k]||0)+r.valor});
- const mn=R.rows.find(r=>r.id==='mina');if(mn&&mn.retro&&mn.retro.costoMina)g[['Mina La Fe','Retroexcavadora','Renta, combustible y salidas','costo'].join('|')]=mn.retro.costoMina;
+ const mn=R.rows.find(r=>r.id==='mina');if(mn&&mn.retro&&mn.retro.costoMina)g[['Mina La Fe','Maquinaria','Renta, combustible y salidas','costo'].join('|')]=mn.retro.costoMina;
  return Object.entries(g).map(([k,v])=>{const [p,s,c,n]=k.split('|');return {p,s,c,n,v}}).sort((a,b)=>b.v-a.v)}
 function topTerceros(R,n=6){const g={};R.M.filter(r=>r.nat!=='anticipo'&&r.tercero).forEach(r=>{const k=r.tercero.trim().toUpperCase();g[k]=(g[k]||0)+r.valor});return Object.entries(g).sort((a,b)=>b[1]-a[1]).slice(0,n)}
 function insights(f,t){
@@ -1349,7 +1416,7 @@ function insights(f,t){
  if(P&&P.T.egr>0){const cur=catBreak(R).filter(x=>x.n!=='inversion'),prv=catBreak(P);const pm={};prv.forEach(x=>pm[x.p+'|'+x.c]=(pm[x.p+'|'+x.c]||0)+x.v);
   let best=null;cur.forEach(x=>{const b=pm[x.p+'|'+x.c]||0;const d=x.v-b;if(d>=300000&&b>0&&(!best||d>best.d))best={x,b,d}});
   if(best)out.push({t:'wa',x:`${best.x.c} (${best.x.p}) subió ${pct(best.x.v,best.b).toFixed(0)}%: ${fmt(best.x.v)} frente a ${fmt(best.b)} en el periodo anterior.`});
-  const nw=cur.filter(x=>!pm[x.p+'|'+x.c]&&x.v>=1000000&&x.s!=='Retroexcavadora').sort((a,b)=>b.v-a.v)[0];if(nw)out.push({t:'info',x:`Gasto nuevo en el periodo: ${nw.c} (${nw.p}) por ${fmt(nw.v)}.`})}
+  const nw=cur.filter(x=>!pm[x.p+'|'+x.c]&&x.v>=1000000&&x.s!=='Maquinaria').sort((a,b)=>b.v-a.v)[0];if(nw)out.push({t:'info',x:`Gasto nuevo en el periodo: ${nw.c} (${nw.p}) por ${fmt(nw.v)}.`})}
  const mn=R.rows.find(r=>r.id==='mina');
  if(mn){if(mn.cortes)out.push({t:'ok',x:`Se lavaron ${fg(mn.oroG)} g de oro en ${mn.cortes} corte${mn.cortes>1?'s':''} (${fmt(mn.oroG?mn.bruto/mn.oroG:0)} por gramo en promedio). Al dueño de la mina le correspondieron ${fmt(mn.ing)}; la mina cubre el ${mn.cos?Math.round(mn.ing/mn.cos*100):0}% de sus costos del periodo.`});
   else{const pend=minaPendiente();out.push({t:pend?'wa':'info',x:`No hubo cortes de oro en el periodo. Los costos de la mina por cubrir con el próximo corte suman ${fmt(pend)}.`})}}
@@ -1362,7 +1429,7 @@ function insights(f,t){
  const venc=L('obl').filter(o=>!o.done&&o.fecha<today()&&assetOf(o)&&!assetOf(o).del);if(venc.length)out.push({t:'ba',x:`${venc.length} obligación${venc.length>1?'es':''} de activos vencida${venc.length>1?'s':''}: ${venc.slice(0,3).map(o=>oblName(o)+' de '+ASSET[o.ac].name(assetOf(o))).join(', ')}${venc.length>3?'…':''}.`});
  const iv=L('mov').filter(r=>/^ivanna/i.test(r.cat||''));if(iv.length){const m=thisMonth();const cm=sum(iv.filter(r=>r.fecha.startsWith(m)));const months=new Set(iv.filter(r=>!r.fecha.startsWith(m)).map(r=>r.fecha.slice(0,7)));const avg=months.size?sum(iv.filter(r=>!r.fecha.startsWith(m)))/months.size:0;
   out.push({t:'info',x:`Ivanna: ${fmt(cm)} este mes${avg?`, ${cm>=avg?'por encima':'por debajo'} del promedio mensual de ${fmt(avg)}`:''}.`})}
- if(mn&&mn.retro&&mn.retro.horas){const rr=mn.retro;out.push({t:rr.bajo?'wa':'info',x:`Retroexcavadora: ${fg(rr.horas)} horas en el periodo. Cada hora le cuesta a la mina ${fmt(rr.costoMina/rr.horas)} con combustible incluido${rr.bajo?`; ${rr.bajo} días quedaron bajo el mínimo de ${S.retroP.min} horas`:''}.`})}
+ if(mn&&mn.retro&&mn.retro.horas){const rr=mn.retro;out.push({t:rr.bajo?'wa':'info',x:`Maquinaria: ${fg(rr.horas)} horas en el periodo. Cada hora le cuesta a la mina ${fmt(rr.costoMina/rr.horas)} con combustible incluido${rr.bajo?`; ${rr.bajo} días quedaron bajo el mínimo de ${S.retroP.min} horas`:''}.`})}
  return out;
 }
 function pygRows(R){
@@ -1496,7 +1563,7 @@ async function exportPdf(){
 }
 
 /* ---------- sincronización (Apps Script) ---------- */
-const COLLS=['mov','prest','abonos','cab','veh','inm','per','cortes','rh','rs','rc','rcort','cats','eq','obl'];
+const COLLS=['mov','prest','abonos','cab','veh','inm','per','cortes','rh','rs','rc','rcort','cats','eq','obl','maq','own'];
 function migrate(){
  COLLS.forEach(c=>{if(!Array.isArray(S[c]))S[c]=[]});if(!Array.isArray(S.outbox))S.outbox=[];
  S.cfg=Object.assign({role:'admin',pin:'',url:'',token:'',device:uid(),sheetUrl:'https://docs.google.com/spreadsheets/d/1ggJdlmDgeIXk0o0W41a9pRzUtoiHNmZOvs5IT0KSpTk/edit',pct:{ter:20,emp:8,com:2,adm:3},presMina:0},S.cfg||{});
@@ -1512,6 +1579,13 @@ function migrate(){
    if(miss.length===1&&REF[c])REF[c].forEach(([rc,f])=>S[rc].forEach(x=>{if(f in x&&(x[f]==null||x[f]==='undefined')&&(rc!=='obl'||x.ac===c)){x[f]=miss[0].id;if(x.id)queue(rc,x.id)}}))});
   S.outbox=S.outbox.filter(o=>o.id&&o.id!=='undefined');
   S.v=3;save();
+ }
+ if(S.v<4){
+  const P=S.retroP;const ed=['admin','aux'].includes(S.cfg.role)&&(S.rh.length>0||(P.upd||0)>1);
+  if(ed&&!byId('maq',MQ0)){const up=Math.max(P.upd||1,1);
+   if(P.dueno&&!byId('own','o1')){S.own.push({id:'o1',nombre:P.dueno,tel:'',cedula:'',cre:up,upd:up,by:'migracion'});if(ed)queue('own','o1')}
+   S.maq.push({id:MQ0,maq:P.maq||'Retroexcavadora',tipo:'Retroexcavadora',prop:'Tercero',own:P.dueno?'o1':'',dueno:P.dueno||'',precio:P.precio||0,min:P.min??7,alerta:P.alerta??80,pctComb:P.pctComb||0,serie:'',inactivo:false,cre:up,upd:up,by:'migracion'});if(ed)queue('maq',MQ0)}
+  S.v=4;save();
  }
 }
 async function api(op,payload={}){
@@ -1534,18 +1608,18 @@ function mergeIn(x){
   if(r.id==='conf'&&(r.upd||0)>(S.cfg.confUpd||0)){if(r.pct)S.cfg.pct=r.pct;if(r.presMina!=null)S.cfg.presMina=r.presMina;S.cfg.confUpd=r.upd}return}
  if(!COLLS.includes(x.c)||!x.rec||!x.rec.id)return;
  const okId=v=>v==null||v===''||/^[\w.:-]{1,80}$/.test(String(v));
- if(!okId(x.rec.id)||!['foto','fotoDrive','foto2','fotoDrive2','per','veh','cab','eq','inm','prest','aid'].every(k=>okId(x.rec[k])))return;
+ if(!okId(x.rec.id)||!['foto','fotoDrive','foto2','fotoDrive2','per','veh','cab','eq','inm','prest','aid','mq','own'].every(k=>okId(x.rec[k])))return;
  const cur=byId(x.c,x.rec.id);
  if(!cur){S[x.c].push(x.rec);return}
  if((x.rec.upd||0)>(cur.upd||0)){if(S.outbox.some(o=>o.c===x.c&&o.id===cur.id)&&(cur.upd||0)>(x.rec.upd||0))return;Object.keys(cur).forEach(k=>delete cur[k]);Object.assign(cur,x.rec);S.outbox=S.outbox.filter(o=>!(o.c===x.c&&o.id===cur.id))}
 }
-const FOLDER_OF=(c,r)=>c==='mov'?(r.p==='inm'?(byId('inm',r.inm)?.nombre||'Inmuebles'):PNAME[r.p]||'Otros'):['rh','rs','rc'].includes(c)?'Retroexcavadora':['prest','abonos'].includes(c)?'Préstamos':['veh','cab','inm','eq'].includes(c)?'Activos':'Otros';
+const FOLDER_OF=(c,r)=>c==='mov'?(r.p==='inm'?(byId('inm',r.inm)?.nombre||'Inmuebles'):PNAME[r.p]||'Otros'):c==='maq'?'Maquinaria':['rh','rs','rc'].includes(c)?'Maquinaria · '+mqById(mqOf(r)).maq:['prest','abonos'].includes(c)?'Préstamos':['veh','cab','inm','eq'].includes(c)?'Activos':'Otros';
 const pendingPhotos=()=>COLLS.flatMap(c=>L(c).flatMap(r=>['','2'].filter(x=>r['foto'+x]&&!r['fotoDrive'+x]).map(x=>({c,r,x}))));
 async function uploadPhotos(){
  if(!canPush())return 0;let n=0;
  for(const {c,r,x} of pendingPhotos().slice(0,8)){
   const f=IMG[r['foto'+x]]||await DB.get('files',r['foto'+x]);if(!f){continue}
-  try{const j=await api('file',{data:f.data,name:f.name||'soporte.jpg',folder:FOLDER_OF(c,r),prefix:(r.fecha||today())+' '+(ASSET[c]?ASSET[c].name(r):(r.concepto||r.nombre||(c==='rh'?'jornada'+(x?' final':' inicio'):c)))});upsert(c,{id:r.id,['fotoDrive'+x]:j.fileId,['fotoUrl'+x]:j.url});n++}catch(e){break}
+  try{const j=await api('file',{data:f.data,name:f.name||'soporte.jpg',folder:FOLDER_OF(c,r),prefix:(r.fecha||today())+' '+(ASSET[c]?ASSET[c].name(r):(r.maq||r.concepto||r.nombre||(c==='rh'?'jornada'+(x?' final':' inicio'):c)))});upsert(c,{id:r.id,['fotoDrive'+x]:j.fileId,['fotoUrl'+x]:j.url});n++}catch(e){break}
  }
  return n;
 }
@@ -1571,6 +1645,7 @@ async function sync(manual){
    applyScope(j);
    S.outbox=canPush()?S.outbox.filter(o=>!items.some(s=>s.c===o.c&&s.id===o.id&&s.t>=o.t)):[];
    (j.changes||[]).forEach(mergeIn);got+=(j.changes||[]).length;sent+=j.accepted||0;
+   if(Array.isArray(j.mqs)){const ok=new Set(j.mqs);S.maq=S.maq.filter(m=>ok.has(m.id));['rh','rs','rc','rcort'].forEach(c=>S[c]=S[c].filter(r=>ok.has(mqOf(r))));S.own=S.own.filter(o=>o.id===j.own)}
    if(full)S.cfg.pushedAll=S.cfg.url;
    S.lastSync=j.serverTime||Date.now();S.cfg.syncErr='';save();
    const up=await uploadPhotos();
