@@ -279,6 +279,11 @@ table.pyg tr.nota td{color:var(--mut);font-style:italic}
   table.t.cards td[data-l]::before{content:attr(data-l) " · ";color:var(--dim);font-size:11.5px}
   table.t.cards td.p{grid-column:1/-1;font-weight:600}
   table.t.cards td.n{grid-column:2;grid-row:1;font-size:14px}
+  table.t.cards td.n[data-l]{grid-column:1/-1;grid-row:auto;text-align:left;font-size:13px}
+  .grid.k4{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .grid.k4 .kpi{padding:13px}
+  .grid.k4 .kpi .v{font-size:18px}
+  .grid.k4 .kpi .l{font-size:10px;letter-spacing:.08em}
   table.t.cards td.acts{grid-column:1/-1;text-align:left}
   table.t.cards tfoot tr{display:flex;justify-content:space-between}
 }
@@ -584,7 +589,7 @@ const canDel=()=>S.cfg.role==='admin';
 /* ---------- navegación ---------- */
 let OPEN={};
 function navItems(){
- if(S.cfg.role==='dueno')return MOD.filter(m=>m.id==='retro').map(m=>({...m,subs:m.subs.filter(s=>s.id==='dueno')}));
+ if(S.cfg.role==='dueno')return MOD.filter(m=>m.id==='retro'||m.id==='ajustes').map(m=>m.subs?{...m,subs:m.subs.filter(s=>s.id==='dueno')}:m);
  return MOD;
 }
 function renderNav(){
@@ -600,7 +605,7 @@ function renderNav(){
 }
 function go(m,s){
  const mod=modOf(m);if(mod?.subs&&!s)s=mod.subs[0].id;
- if(S.cfg.role==='dueno'){m='retro';s='dueno'}
+ if(S.cfg.role==='dueno'&&m!=='ajustes'){m='retro';s='dueno'}
  if(S.cfg.role==='conta'&&m==='ajustes'){}
  V.m=m;V.s=s||null;V.q='';OPEN[m]=true;V.sel=false;PICK.clear();
  try{history.replaceState(null,'','#'+m+(s?'.'+s:''))}catch(e){}
@@ -903,7 +908,7 @@ function vInicio(){
 
 /* Ajustes */
 function vAjustes(){
- const c=S.cfg;const pend=S.outbox.length;
+ const c=S.cfg;const pend=S.outbox.length;const lim=['dueno','conta'].includes(c.role);
  return `<div class="grid two"><div class="card"><h3>Perfil de este equipo</h3><div class="fg">
  <div class="fld w"><label for="role">Vista de este equipo</label><select id="role" data-act-change="role" ${c.tokRole&&c.tokRole!=='admin'?'disabled':''}>${Object.entries(ROLES).map(([k,v])=>`<option value="${k}" ${c.role===k?'selected':''}>${v}</option>`).join('')}</select><div class="hint">Administrador: todo. Auxiliar: registra y edita, no borra. Contador: solo lectura e informes. Dueño de la máquina: solo su vista de la retroexcavadora. Este selector solo cambia lo que ves aquí; a otras personas se les da acceso con su propia clave en su equipo.${c.tokRole&&c.tokRole!=='admin'?' En este equipo el perfil lo define la clave de acceso.':''}</div></div>
  <div class="fld w"><label for="pin">PIN de administrador</label><input id="pin" type="password" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="${c.pin?'PIN guardado (escribe uno nuevo para cambiarlo)':'Sin PIN'}" value="" ${S.cfg.role!=='admin'?'disabled':''}><div class="hint">Se pide para volver a Administrador desde otro perfil.</div></div>
@@ -913,12 +918,12 @@ function vAjustes(){
  <div class="fg"><div class="fld w"><label for="surl">Enlace del servicio (Apps Script)</label><input id="surl" placeholder="https://script.google.com/macros/s/…/exec" value="${esc(c.url)}"></div><div class="fld"><label for="stok">Clave de acceso</label><input id="stok" value="${esc(c.token)}" placeholder="Ej. ADM-1a2b3c4d5e6f" autocomplete="off"></div><div class="fld"><label for="ssheet">Enlace del Sheet para el contador</label><input id="ssheet" value="${esc(c.sheetUrl)}"></div></div>
  <div class="bar" style="margin-top:12px"><button class="btn pri" data-act="saveSync">Guardar y conectar</button><button class="btn" data-act="sync">${ic('sync')}Sincronizar ahora</button>${c.tokRole==='admin'?`<button class="btn gh" data-act="resend">Enviar todo de nuevo</button>`:''}</div>
  <p class="note" style="margin:12px 0 0">Todo se guarda primero en este equipo y funciona sin internet. Al volver la señal, los cambios se envían solos al Sheet y se reciben los que se hayan hecho en el Drive.</p></div></div>
- <div class="grid k3"><div class="card"><h3>Respaldo</h3><div class="bar"><button class="btn" data-act="backup">${ic('dl')}Exportar respaldo</button><label class="btn" for="restore">${ic('sync')}Restaurar respaldo</label><input type="file" id="restore" accept="application/json" hidden></div><p class="note" style="margin:12px 0 0">Datos importados del Sheet “Control Financiero PROYECTOS” el ${fd(c.imported)}: Mina La Fe, Villa Suárez, Gastos Personales, Retroexcavadora y Nómina.</p></div>
+ ${lim?`<div class="card"><h3>Instalar en este dispositivo</h3>${isStandalone()?'<div class="al ok"><i></i><div>La app está instalada y funciona sin internet en este equipo.</div></div>':'<p class="note" style="margin:0">iPhone: Safari → Compartir → Agregar a pantalla de inicio. Android: Chrome → ⋮ → Instalar aplicación. PC: Chrome o Edge → ícono de instalar en la barra de direcciones.</p>'}</div>`:`<div class="grid k3"><div class="card"><h3>Respaldo</h3><div class="bar"><button class="btn" data-act="backup">${ic('dl')}Exportar respaldo</button><label class="btn" for="restore">${ic('sync')}Restaurar respaldo</label><input type="file" id="restore" accept="application/json" hidden></div><p class="note" style="margin:12px 0 0">Datos importados del Sheet “Control Financiero PROYECTOS” el ${fd(c.imported)}: Mina La Fe, Villa Suárez, Gastos Personales, Retroexcavadora y Nómina.</p></div>
  <div class="card"><h3>Instalar en este dispositivo</h3>${isStandalone()?'<div class="al ok"><i></i><div>La app está instalada y funciona sin internet en este equipo.</div></div>':`${INSTALL?`<div class="bar"><button class="btn pri" data-act="install">${ic('dl')}Instalar app</button></div>`:''}<div class="kv" style="margin-top:10px;grid-template-columns:auto 1fr"><span>iPhone / iPad</span><span style="text-align:left;font-family:var(--f-body)">Abrir en Safari → Compartir → Agregar a pantalla de inicio</span><span>Android</span><span style="text-align:left;font-family:var(--f-body)">Chrome → menú ⋮ → Instalar aplicación</span><span>PC</span><span style="text-align:left;font-family:var(--f-body)">Chrome o Edge → ícono de instalar en la barra de direcciones</span></div>`}</div>
  <div class="card"><h3>Mina La Fe</h3><div class="fg"><div class="fld"><label for="presM">Presupuesto de la mina</label><input id="presM" inputmode="numeric" data-money value="${(c.presMina||0).toLocaleString('es-CO')}"></div></div><div class="bar" style="margin-top:12px"><button class="btn pri" data-act="savePres">Guardar</button><button class="btn dan del-only" data-act="reset">Restablecer datos</button></div></div></div>
  <div class="card"><h3>Categorías personalizadas<span class="r"><button class="btn sm edit-only" data-act="newCat">${ic('plus')}Nueva categoría</button></span></h3>
  <p class="note" style="margin:0 0 12px">Cada categoría nueva queda clasificada como gasto, costo o inversión según el rubro, para que los informes al contador sigan cuadrando.</p>
- ${L('cats').length?`<div class="tw"><table class="t cards"><thead><tr><th>Rubro</th><th>Categoría</th><th>Clasificación</th><th class="n">Registros</th><th></th></tr></thead><tbody>${L('cats').map(c=>{const [m,sb]=c.key.split('.');const n=L('mov').filter(r=>r.p===m&&r.s===sb&&r.cat===c.name).length;return `<tr class="rw"><td data-l="Rubro">${esc(modOf(m)?.name||m)} › ${esc(subOf(m,sb)?.name||sb)}</td><td class="p">${esc(c.name)}</td><td>${tagN(c.nat)}</td><td class="n" data-l="Registros">${n}</td><td class="acts">${n?'<span class="mut" style="font-size:12px">En uso</span>':`<button class="ib dan del-only" data-act="delCat" data-id="${c.id}" title="Eliminar">${ic('trash')}</button>`}</td></tr>`}).join('')}</tbody></table></div>`:'<div class="empty">Aún no hay categorías personalizadas. Créalas desde aquí o con “+ Categoría” en cada rubro.</div>'}</div>`;
+ ${L('cats').length?`<div class="tw"><table class="t cards"><thead><tr><th>Rubro</th><th>Categoría</th><th>Clasificación</th><th class="n">Registros</th><th></th></tr></thead><tbody>${L('cats').map(c=>{const [m,sb]=c.key.split('.');const n=L('mov').filter(r=>r.p===m&&r.s===sb&&r.cat===c.name).length;return `<tr class="rw"><td data-l="Rubro">${esc(modOf(m)?.name||m)} › ${esc(subOf(m,sb)?.name||sb)}</td><td class="p">${esc(c.name)}</td><td>${tagN(c.nat)}</td><td class="n" data-l="Registros">${n}</td><td class="acts">${n?'<span class="mut" style="font-size:12px">En uso</span>':`<button class="ib dan del-only" data-act="delCat" data-id="${c.id}" title="Eliminar">${ic('trash')}</button>`}</td></tr>`}).join('')}</tbody></table></div>`:'<div class="empty">Aún no hay categorías personalizadas. Créalas desde aquí o con “+ Categoría” en cada rubro.</div>'}</div>`}`;
 }
 
 /* ---------- formularios ---------- */
