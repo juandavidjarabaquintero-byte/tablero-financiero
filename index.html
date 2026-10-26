@@ -245,6 +245,15 @@ table.pyg tr.nota td{color:var(--mut);font-style:italic}
 .pk svg{width:16px;height:16px;stroke:currentColor}
 .pk.on{background:var(--cyan);border-color:var(--cyan);color:#05202a}
 .t tr.picked td{background:#2ee6f00f}
+.supg{grid-template-columns:repeat(4,minmax(0,1fr))}
+.supg .kh{grid-column:span 2;background:linear-gradient(135deg,#123a5a,#141c52 60%)}
+.supg .kh .v{font-size:34px}
+@media (max-width:1100px){.supg{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:560px){.supg{grid-template-columns:minmax(0,1fr)}.supg .kh{grid-column:auto}.supg .kh .v{font-size:26px}}
+.kpl{width:100%;text-align:left;font:inherit;color:inherit;cursor:pointer;transition:border-color .15s,transform .15s}
+.kpl:hover{border-color:var(--c);transform:translateY(-1px)}
+.kpl .l{display:flex;align-items:center;gap:7px}
+.kic svg{width:15px;height:15px;stroke:currentColor;display:block}
 .ro .edit-only{display:none!important}
 .nodel .del-only{display:none!important}
 @media (max-width:1100px){.two{grid-template-columns:minmax(0,1fr)}}
@@ -858,6 +867,25 @@ function alerts(){
  if(S.outbox.length)a.push(['',`${S.outbox.length} cambios guardados en este equipo esperan sincronizar con Drive.`]);
  return a;
 }
+function superCards(R){
+ const y=new Date().getFullYear(),mes=thisMonth(),mn=R.rows.find(r=>r.id==='mina');
+ const mesDe=p=>sum(L('mov').filter(r=>r.p===p&&r.nat!=='anticipo'&&r.fecha.startsWith(mes)));
+ const card=(m,s,icon,col,lab,val,sub,cls='')=>`<button class="card kpi kpl${lab==='Ingresos por oro'?' kh':''}" style="--c:${col}" data-act="go" data-m="${m}"${s?` data-s="${s}"`:''}><div class="l"><span class="kic" style="color:${col}">${ic(icon)}</span>${lab}</div><div class="v ${cls}">${val}</div><div class="s">${sub}</div></button>`;
+ const per=R.rows.find(r=>r.id==='personal'),par=R.rows.find(r=>r.id==='parcela');
+ const inms=R.rows.filter(r=>String(r.id).startsWith('inm:'));const inmE=sum(inms,r=>r.egr);
+ const inmSub=inms.length===1&&inms[0].pres?`${esc(inms[0].name)}: ${Math.round(sum(L('mov').filter(r=>r.p==='inm'&&r.inm===inms[0].id.slice(4)),r=>r.valor)/inms[0].pres*100)}% del presupuesto`:`${inms.length} propiedad${inms.length===1?'':'es'} · este mes ${fmt(mesDe('inm'))}`;
+ const prs=L('prest').filter(p=>saldoPrest(p)>0);
+ const {f}=retroPeriodo();const RA=retroCalc(f,'');const RY=mn.retro;
+ return `<div class="grid supg">
+ ${card('mina','cortes','gem','#24d6a5','Ingresos por oro',fmt(R.T.ing),`${mn.cortes} corte${mn.cortes===1?'':'s'} en ${y}${mn.oroG?' · '+fg(mn.oroG)+' g':''}`,'pos')}
+ ${card('personal','','user',PCOL.personal,'Gastos personales',fmt(per.egr),`En ${y} · este mes ${fmt(mesDe('personal'))}`)}
+ ${card('prestamos','','coin','#f2c75c','Préstamos por cobrar',fmt(R.pr.saldo),`${prs.length} préstamo${prs.length===1?'':'s'} con saldo`,'gold')}
+ ${card('parcela','','leaf',PCOL.parcela,'Parcela Las Colinas',fmt(par.egr),`En ${y} · este mes ${fmt(mesDe('parcela'))}`)}
+ ${card('inm','','bld',PCOL.inm,'Inmuebles',fmt(inmE),inmSub)}
+ ${card('retro','resumen','dig','#2ee6f0','Retroexcavadora',fmt(RY.costoMina),`Costo para la mina en ${y} · neto al dueño ${fmt(RA.neto)}`)}
+ ${card('mina','','gem',PCOL.mina,'Mina La Fe',fmt(mn.cos+mn.inv),`Costos e inversiones en ${y} · por cubrir ${fmt(minaPendiente())}`)}
+ </div>`;
+}
 function vInicio(){
  const y0=new Date().getFullYear()+'-01-01';const R=report(y0,today());const T=R.T;
  const rows=R.rows;const mx=Math.max(1,...rows.map(r=>r.egr));
@@ -865,7 +893,7 @@ function vInicio(){
  const al=alerts();
  const rec=L('mov').slice().sort((a,b)=>b.cre-a.cre||b.fecha.localeCompare(a.fecha)).slice(0,8);
  const first=!L('mov').length&&!L('prest').length?`<div class="card" style="border-color:var(--cyan)"><h3>Primeros pasos</h3><p style="margin:0 0 12px">Este equipo aún no tiene datos. Carga el archivo <b>datos-iniciales.json</b> o un respaldo para empezar con la información del Sheet, o registra el primer movimiento.</p><div class="bar"><button class="btn pri" data-act="go" data-m="ajustes">${ic('sync')}Cargar respaldo</button><button class="btn edit-only" data-act="quick">${ic('plus')}Registrar movimiento</button></div></div>`:'';
- return first+`<div class="grid k4">${kpi('Ingresos por oro',fmt(T.ing),`${R.rows.find(r=>r.id==='mina').cortes} cortes en ${new Date().getFullYear()}`,'c-te','pos')}${kpi('Gastos y costos',fmt(T.gas+T.cos),`Gastos ${fmtK(T.gas)} · Costos ${fmtK(T.cos)}`,'c-ba')}${kpi('Inversiones',fmt(T.inv),'Activos fijos y obras','c-vi')}${kpi('Resultado neto',fmt(T.util),'Ingresos menos gastos y costos','c-go',T.util<0?'neg':'pos')}</div>
+ return first+superCards(R)+`
  <div class="grid two"><div class="card"><h3>Egresos e ingresos por mes<span class="r mut">Últimos 6 meses</span></h3>${monthChart(monthSeries())}</div>
  <div class="card"><h3>Peso de cada proyecto<span class="r mut">% del egreso mayor</span></h3><div class="rings">${rows.map((r,i)=>`<div class="ring">${ringSvg(r.egr/mx*100,...cols[i%cols.length])}<b>${esc(r.name)}</b><small>${fmtK(r.egr)}</small></div>`).join('')}</div></div></div>
  <div class="grid two"><div class="card"><h3>Últimos registros<span class="r"><button class="btn sm gh" data-act="go" data-m="informes">${ic('chart')}Ver informes</button></span></h3>${movTable(rec,{showP:true,noActs:true})}</div>
