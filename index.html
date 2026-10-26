@@ -282,6 +282,11 @@ table.pyg tr.nota td{color:var(--mut);font-style:italic}
 .pl svg{width:12px;height:12px;vertical-align:-2px;margin-right:4px}
 .pl.nov{color:#ffb547;border-color:#ffb54766;background:#ffb5470f;font-weight:600}
 .rgs{padding:14px 16px}
+.cutw{display:flex;align-items:center;border-bottom:1px solid #ffffff10;border-radius:10px}
+.cutw:last-child{border-bottom:0}.cutw .rl{border-bottom:0;flex:1;min-width:0}
+.cutw.on{background:#2ee6f012;box-shadow:inset 3px 0 0 var(--cyan)}
+.cutw .v2{text-align:right;white-space:nowrap}.cutw .v2 b{display:block;font:700 16px var(--f-disp);font-variant-numeric:tabular-nums}.cutw .v2 small{display:block;color:var(--mut);font-size:13px;margin-top:2px}
+.cacts{display:flex;flex:none;padding-right:4px}
 .ro .edit-only{display:none!important}
 .nodel .del-only{display:none!important}
 @media (max-width:1100px){.two{grid-template-columns:minmax(0,1fr)}}
@@ -806,11 +811,11 @@ function liqTable(liq){return `<table class="t"><thead><tr><th>Beneficiario</th>
 
 /* Retroexcavadora */
 function retroPeriodo(mid){const lc=lastRetroCorte(mid);return {f:lc?addDays(lc,1):'',lc}}
-function retroKpis(R,owner){
- const P=R.P||curMq();
+function retroKpis(R,owner,c){
+ const P=R.P||curMq();const closed=c&&!c.cur;
  if(propia(P))return `<div class="grid k4">${kpi('Horas trabajadas',fg(R.horas)+' h',`${R.dias} día${R.dias===1?'':'s'} · ${fg(R.prom)} h/día`,'c-cy')}${kpi('Repuestos y reparaciones',fmt(R.salM),'Máquina propia','c-wa')}${kpi('Combustible y aceites',fmt(R.comb),'Máquina propia','c-vi')}${kpi('Costo de operación',fmt(R.costoMina),R.horas?fmt(R.costoMina/R.horas)+' por hora':'Sin horas en el periodo','c-ba')}</div>
  <div class="grid k4">${kpi('Días bajo mínimo',R.bajo,`Mínimo ${fg(P.min)} h por día`,R.bajo?'c-ba':'c-te',R.bajo?'neg':'')}</div>`;
- return `<div class="grid k4">${kpi('Horas trabajadas',fg(R.horas)+' h',`${R.dias} día${R.dias===1?'':'s'} · ${fg(R.prom)} h/día`,'c-cy')}${kpi('Renta total',fmt(R.renta),fmt(P.precio)+' por hora','c-te')}${kpi('Repuestos y reparaciones',fmt(-R.repD),'Asume el dueño','c-wa')}${kpi('Neto a pagar al dueño',fmt(R.neto),R.combD?'Incluye descuento de combustible':'Renta menos repuestos','c-go','gold')}</div>
+ return `<div class="grid k4">${kpi('Horas trabajadas',fg(R.horas)+' h',`${R.dias} día${R.dias===1?'':'s'} · ${fg(R.prom)} h/día`,'c-cy')}${kpi('Renta total',fmt(R.renta),fmt(P.precio)+' por hora','c-te')}${kpi('Repuestos y reparaciones',fmt(-R.repD),'Asume el dueño','c-wa')}${kpi(closed?'Neto liquidado al dueño':'Neto a pagar al dueño',fmt(R.neto),R.combD?'Incluye descuento de combustible':'Renta menos repuestos','c-go','gold')}</div>
  <div class="grid k4">${kpi('Días bajo mínimo',R.bajo,`Mínimo ${fg(P.min)} h por día`,R.bajo?'c-ba':'c-te',R.bajo?'neg':'')}${kpi('Combustible y aceites',fmt(R.comb),(100-(P.pctComb||0))+'% a cargo de la mina','c-vi')}${owner?'':kpi('Costo total para la mina',fmt(R.costoMina),'Renta + combustible + salidas de la mina','c-ba')}</div>`;
 }
 const mqImg=(m,cls)=>`${m.foto?`<img data-fid="${esc(m.foto)}"${m.fotoDrive?` data-drive="${esc(m.fotoDrive)}"`:''} alt="Foto de ${esc(m.maq)}">`:''}<span class="phc">${ic('dig')}</span>`;
@@ -832,23 +837,23 @@ function jst(r){const P=mqById(mqOf(r));if(enCurso(r))return 'curso';if(!(r.hora
 function hoursChart(h,P){
  P=P||curMq();const d=h.filter(r=>!enCurso(r)).sort((a,b)=>a.fecha.localeCompare(b.fecha)).slice(-21);
  if(!d.length)return '<div class="empty">Sin jornadas registradas.</div>';
- const W=640,H=240,pl=8,pr=8,pt=26,pb=34;const mx=Math.max(P.min*1.45,...d.map(r=>r.horas))*1.04;const bw=(W-pl-pr)/d.length;const y=v=>pt+(H-pt-pb)*(1-v/mx);
+ const W=640,H=240,pl=8,pr=8,pt=26,pb=34;const mx=Math.max(P.min*1.45,...d.map(r=>r.horas))*1.04;const bw=(W-pl-pr)/Math.max(d.length,8);const x0=pl+((W-pl-pr)-bw*d.length)/2;const y=v=>pt+(H-pt-pb)*(1-v/mx);
  let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Rendimiento diario de la máquina"><defs><filter id="glw" x="-50%" y="-20%" width="200%" height="160%"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>`;
- d.forEach((r,i)=>{const st=jst(r);const x=pl+i*bw+bw*.12,w=bw*.76;const hh=Math.max(0,y(0)-y(r.horas));if(r.horas>0)s+=`<path d="M${x},${y(0)} V${y(r.horas)+6} q0,-6 6,-6 H${x+w-6} q6,0 6,6 V${y(0)}Z" fill="${JC[st]}" filter="url(#glw)" opacity=".95"><title>${fdl(r.fecha)}: ${f1(r.horas)} h${r.obs?' · '+esc(r.obs):''}</title></path>`;else s+=`<rect x="${x}" y="${y(0)-3}" width="${w}" height="3" rx="1.5" fill="${JC.sin}" opacity=".6"><title>${fdl(r.fecha)}: sin operación${r.obs?' · '+esc(r.obs):''}</title></rect>`;hh});
+ d.forEach((r,i)=>{const st=jst(r);const x=x0+i*bw+bw*.12,w=bw*.76;const hh=Math.max(0,y(0)-y(r.horas));if(r.horas>0)s+=`<path d="M${x},${y(0)} V${y(r.horas)+6} q0,-6 6,-6 H${x+w-6} q6,0 6,6 V${y(0)}Z" fill="${JC[st]}" filter="url(#glw)" opacity=".95"><title>${fdl(r.fecha)}: ${f1(r.horas)} h${r.obs?' · '+esc(r.obs):''}</title></path>`;else s+=`<rect x="${x}" y="${y(0)-3}" width="${w}" height="3" rx="1.5" fill="${JC.sin}" opacity=".6"><title>${fdl(r.fecha)}: sin operación${r.obs?' · '+esc(r.obs):''}</title></rect>`;hh});
  s+=`<line x1="${pl}" x2="${W-pr}" y1="${y(P.min)}" y2="${y(P.min)}" stroke="#93a0d6" stroke-opacity=".55" stroke-dasharray="5 5"/><text x="${W-pr}" y="${y(P.min)-7}" text-anchor="end" style="fill:#93a0d6;font:500 13px var(--f-body)">Mín ${fg(P.min)} h</text>`;
  s+=`<text x="${pl}" y="${H-8}" style="fill:#93a0d6;font:500 13px var(--f-body)">${fds(d[0].fecha)}</text><text x="${W-pr}" y="${H-8}" text-anchor="end" style="fill:#93a0d6;font:500 13px var(--f-body)">${fds(d[d.length-1].fecha)}</text></svg>`;
  const cnt=k=>d.filter(r=>jst(r)===k).length;const nov=d.filter(r=>r.obs).length;
  return `<div class="chart">${s}</div><div class="lg2"><span><i style="background:${JC.ok}"></i>Meta cumplida ${cnt('ok')}</span><span><i style="background:${JC.cerca}"></i>Cerca ${cnt('cerca')}</span><span><i style="background:${JC.bajo}"></i>Bajo mínimo ${cnt('bajo')}</span><span><i style="background:${JC.sin}"></i>Sin operación ${cnt('sin')}</span><span><i style="background:#ffb547"></i>Con novedad ${nov}</span></div>`;
 }
-function registros(f,owner){
+function registros(f,t2,owner){
  const t=V.f.rtab||'j';const P=curMq();const mid=P.id;
  const tabs=`<div class="seg" role="tablist">${[['j','Jornadas'],['s','Salidas'],['c','Combustible']].map(([k,l])=>`<button role="tab" aria-selected="${t===k}" class="${t===k?'on':''}" data-act="rtab" data-v="${k}">${l}</button>`).join('')}</div>`;
  let rows=[],head='',body='';
- if(t==='j'){rows=LM('rh',mid).filter(r=>inP(r.fecha,f,'')).sort((a,b)=>b.fecha.localeCompare(a.fecha)||(enCurso(a)?-1:0));head=`<span>${rows.length} registros</span><span>${fg(sum(rows,r=>r.horas))} h</span>`;
+ if(t==='j'){rows=LM('rh',mid).filter(r=>inP(r.fecha,f,t2)).sort((a,b)=>b.fecha.localeCompare(a.fecha)||(enCurso(a)?-1:0));head=`<span>${rows.length} registros</span><span>${fg(sum(rows,r=>r.horas))} h</span>`;
   body=rows.map(r=>{const st=jst(r);const c=JC[st];return `<button class="rl" data-act="jdet" data-id="${r.id}"><i class="d" style="color:${c}"></i><span class="t"><b>${fdl(r.fecha)}</b><small>${f1(r.hi)} → ${enCurso(r)?'…':f1(r.hf)}</small></span>${r.obs||r.foto3||r.fotoN3?`<span class="pl nov">${r.foto3||r.fotoN3?ic('nov'):''}Novedad</span>`:''}<span class="pl" style="color:${c};border-color:${c}66;background:${c}1c">${st==='curso'?'En curso':f1(r.horas)+' h'}</span></button>`}).join('')}
- if(t==='s'){rows=LM('rs',mid).filter(r=>inP(r.fecha,f,'')).sort((a,b)=>b.fecha.localeCompare(a.fecha));head=`<span>${rows.length} registros</span><span>${fmt(sum(rows))}</span>`;
+ if(t==='s'){rows=LM('rs',mid).filter(r=>inP(r.fecha,f,t2)).sort((a,b)=>b.fecha.localeCompare(a.fecha));head=`<span>${rows.length} registros</span><span>${fmt(sum(rows))}</span>`;
   body=rows.map(r=>`<button class="rl" data-act="sdet" data-c="rs" data-id="${r.id}"><i class="d" style="color:${r.asume==='Mina'?JC.ok:JC.bajo}"></i><span class="t"><b>${esc(String(r.concepto||'').toUpperCase())}</b><small>${esc(r.tipo||'')}${r.asume==='Mina'?' · Asume la mina':''} · ${fdl(r.fecha)}</small></span><span class="v">${fmt(r.valor)}</span></button>`).join('')}
- if(t==='c'){rows=LM('rc',mid).filter(r=>inP(r.fecha,f,'')).sort((a,b)=>b.fecha.localeCompare(a.fecha));head=`<span>${rows.length} registros</span><span>${fmt(sum(rows))}</span>`;
+ if(t==='c'){rows=LM('rc',mid).filter(r=>inP(r.fecha,f,t2)).sort((a,b)=>b.fecha.localeCompare(a.fecha));head=`<span>${rows.length} registros</span><span>${fmt(sum(rows))}</span>`;
   body=rows.map(r=>`<button class="rl" data-act="sdet" data-c="rc" data-id="${r.id}"><i class="d" style="color:${JC.cerca}"></i><span class="t"><b>${esc(r.tipo||'')}${r.cant?' · '+fg(r.cant)+' '+esc(r.und||''):''}</b><small>${fdl(r.fecha)}${r.horo?' · horómetro '+fg(r.horo):''}</small></span><span class="v">${fmt(r.valor)}</span></button>`).join('')}
  const add=owner?'':`<div class="bar" style="margin-top:12px">${t==='j'?`<button class="btn pri edit-only" data-act="newRh">${ic('plus')}${LM('rh',mid).some(enCurso)?'Registrar jornada':'Iniciar jornada'}</button>`:t==='s'?`<button class="btn pri edit-only" data-act="newRs">${ic('plus')}Registrar salida</button>`:`<button class="btn pri edit-only" data-act="newRc">${ic('plus')}Registrar tanqueo</button>`}</div>`;
  return `<h3 class="sech">Registros</h3><div class="card rgs">${tabs}<div class="rmeta">${head}</div>${body||'<div class="empty">Sin registros en el periodo.</div>'}${add}</div>`;
@@ -869,26 +874,37 @@ function jornadaDetalle(r){
  ${canEdit()?`<div class="sft"><button class="btn gh" data-act="edit" data-c="rh" data-id="${r.id}">${ic('edit')}Editar</button>${enCurso(r)?`<button class="btn pri" data-act="edit" data-c="rh" data-id="${r.id}">${ic('check')}Cerrar jornada</button>`:''}</div>`:''}`;
  $('#modal').hidden=false;
 }
+function cutsOf(mid){const cs=LM('rcort',mid).slice().sort((a,b)=>a.fecha.localeCompare(b.fecha));let prev='';return cs.map((c,i)=>{const o={id:c.id,n:i+1,f:prev?addDays(prev,1):'',t:c.fecha,obs:c.obs||''};prev=c.fecha;return o})}
+function curCut(mid){const cs=cutsOf(mid);const lc=cs.length?cs[cs.length-1].t:'';return {id:'',cur:1,n:cs.length+1,f:lc?addDays(lc,1):'',t:''}}
+function selCut(mid){const id=(V.f.rcut||{})[mid]||'';return (id&&cutsOf(mid).find(c=>c.id===id))||curCut(mid)}
+const cutName=c=>c.cur?'En curso':`Corte ${c.n} · ${fds(c.t)}`;
+const cutRange=c=>c.cur?(c.f?`Del ${fds(c.f)} al hoy`:'Desde el inicio al hoy'):(c.f?`Del ${fds(c.f)} al ${fds(c.t)}`:`Desde el inicio al ${fds(c.t)}`);
+function cortesCard(P,owner){
+ const cs=cutsOf(P.id);if(propia(P)&&!cs.length)return '';const sel=selCut(P.id);
+ const items=[curCut(P.id),...cs.slice().reverse()];
+ return `<h3 class="sech">Cortes de liquidación</h3><div class="card rgs cuts">${items.map(c=>{const R=retroCalc(c.f,c.t,P.id);const on=c.id===sel.id;
+  return `<div class="cutw${on?' on':''}"><button class="rl" data-act="cutSel" data-mq="${P.id}" data-id="${c.id}" aria-pressed="${on}"><i class="d" style="color:${c.cur?'#8b7bff':'#2ee6f0'}"></i><span class="t"><b>${cutName(c)}</b><small>${cutRange(c)}${c.obs?' · '+esc(c.obs):''}</small></span><span class="v2"><b>${fmt(propia(P)?R.costoMina:R.neto)}</b><small>${f1(R.horas)} h</small></span></button>${!owner&&!c.cur?`<span class="cacts"><button class="ib edit-only" data-act="edit" data-c="rcort" data-id="${c.id}" title="Editar corte" aria-label="Editar corte">${ic('edit')}</button><button class="ib dan del-only" data-act="del" data-c="rcort" data-id="${c.id}" title="Eliminar corte" aria-label="Eliminar corte">${ic('trash')}</button></span>`:''}</div>`}).join('')}</div>`;
+}
+function selBanner(c){return c.cur?'':`<div class="al in" style="margin:0 0 14px"><i></i><div>Viendo <b>${cutName(c)}</b> (${cutRange(c).toLowerCase()}). <button class="btn sm gh" style="margin-left:6px" data-act="cutSel" data-mq="${curMq().id}" data-id="">Volver al periodo en curso</button></div></div>`}
 SPV.rres=()=>{
- const P=curMq();const mid=P.id;const {f,lc}=retroPeriodo(mid);const R=retroCalc(f,'',mid);
- const cuts=LM('rcort',mid).slice().sort((a,b)=>a.fecha.localeCompare(b.fecha));
- let prev='';const hist=cuts.map(c=>{const r=retroCalc(prev?addDays(prev,1):'',c.fecha,mid);const o={c,r,desde:prev?addDays(prev,1):''};prev=c.fecha;return o}).reverse();
- const all=mqList().length>1?retroCalc(f,''):null;
- return `${mqSel(false)}${all?`<div class="grid k4">${kpi('Toda la maquinaria · horas',fg(all.horas)+' h',mqList().length+' máquinas','c-cy')}${kpi('Neto por pagar a dueños',fmt(all.neto),'Periodos abiertos','c-go','gold')}${kpi('Costo total para la mina',fmt(all.costoMina),'Todas las máquinas','c-ba')}</div>`:''}
- <div class="card"><div class="split"><div><h3 style="margin:0 0 4px">${esc(P.maq)}${propia(P)?' · Propia':P.dueno?' · Dueño '+esc(P.dueno):''}</h3><div class="mut" style="font-size:13px">Periodo actual ${lc?'desde '+fd(addDays(lc,1)):'desde el primer registro'}</div></div>
+ const P=curMq();const mid=P.id;const c=selCut(mid);const R=retroCalc(c.f,c.t,mid);
+ const all=mqList().length>1;const AP=all?mqList().map(m=>retroCalc(curCut(m.id).f,'',m.id)):[];
+ return `${mqSel(false)}${all?`<div class="grid k4">${kpi('Toda la maquinaria · horas',fg(sum(AP,x=>x.horas))+' h',mqList().length+' máquinas · periodos en curso','c-cy')}${kpi('Neto por pagar a dueños',fmt(sum(AP,x=>x.neto)),'Periodos en curso','c-go','gold')}${kpi('Costo para la mina',fmt(sum(AP,x=>x.costoMina)),'Periodos en curso','c-ba')}</div>`:''}
+ <div class="card"><div class="split"><div><h3 style="margin:0 0 4px">${esc(P.maq)}${propia(P)?' · Propia':P.dueno?' · Dueño '+esc(P.dueno):''}</h3><div class="mut" style="font-size:13px">${cutName(c)} · ${cutRange(c)}</div></div>
  <div class="bar"><button class="btn sm gh" data-act="dlRep" data-k="mq" data-id="${mid}">${ic('dl')}Descargar informe</button><button class="btn sm gh" data-act="go" data-m="retro" data-s="dueno">${ic('eye')}Vista del dueño</button>${propia(P)?'':`<button class="btn sm pri edit-only" data-act="retroCorte">Cerrar liquidación</button>`}</div></div></div>
- ${retroKpis(R,false)}
+ ${selBanner(c)}${retroKpis(R,false,c)}
  <h3 class="sech">Rendimiento diario</h3><div class="card">${hoursChart(R.h,P)}</div>
- ${registros(f,false)}
- <div class="card"><h3>Liquidaciones cerradas</h3>${hist.length?`<div class="tw"><table class="t"><thead><tr><th>Corte</th><th class="n">Horas</th><th class="n">Neto dueño</th><th></th></tr></thead><tbody>${hist.map(o=>`<tr class="rw"><td class="num">${fd(o.c.fecha)}${o.c.obs?`<div class="mut" style="font-size:12px">${esc(o.c.obs)}</div>`:''}</td><td class="n">${fg(o.r.horas)}</td><td class="n">${fmt(o.r.neto)}</td>${rowActs('rcort',o.c.id)}</tr>`).join('')}</tbody></table></div>`:'<div class="empty">Sin liquidaciones cerradas. Al pagarle al dueño, toca “Cerrar liquidación”.</div>'}</div>`;
+ ${cortesCard(P,false)}
+ ${registros(c.f,c.t,false)}`;
 };
 SPV.rdue=()=>{
  if(S.cfg.role==='dueno'&&!L('maq').length&&!L('rh').length)return `<div class="card"><div class="empty">Aún no tienes máquinas asignadas. Sincroniza en Ajustes o pide al administrador que te asigne tu máquina.</div></div>`;
- const P=curMq();const mid=P.id;const {f,lc}=retroPeriodo(mid);const R=retroCalc(f,'',mid);
- return `${mqSel(true)}<div class="card mqhc" style="background:linear-gradient(120deg,#1a2a7a,#16205e 60%,#1b1a63)">${P.foto?`<button class="hero mqh" data-act="mqFoto" data-id="${P.id}" aria-label="Ver foto de ${esc(P.maq)}">${mqImg(P)}</button>`:''}<div class="split"><div><div class="mut" style="font:600 11px var(--f-disp);letter-spacing:.14em;text-transform:uppercase">Seguimiento de la máquina</div><div style="font:700 24px var(--f-disp);letter-spacing:.03em">${esc(P.maq)}</div><div class="mut">${esc(mqSub(P))} · Periodo ${lc?'desde '+fd(addDays(lc,1)):'actual'}</div></div>${propia(P)?'':`<div style="text-align:right"><div class="mut" style="font:600 11px var(--f-disp);letter-spacing:.14em;text-transform:uppercase">Neto a pagar</div><div class="gold" style="font:700 30px var(--f-disp)">${fmt(R.neto)}</div></div>`}</div><div class="bar" style="margin-top:14px"><button class="btn sm" data-act="dlRep" data-k="mq" data-id="${mid}">${ic('dl')}Descargar informe</button></div></div>
- ${retroKpis(R,true)}
+ const P=curMq();const mid=P.id;const c=selCut(mid);const R=retroCalc(c.f,c.t,mid);
+ return `${mqSel(true)}<div class="card mqhc" style="background:linear-gradient(120deg,#1a2a7a,#16205e 60%,#1b1a63)">${P.foto?`<button class="hero mqh" data-act="mqFoto" data-id="${P.id}" aria-label="Ver foto de ${esc(P.maq)}">${mqImg(P)}</button>`:''}<div class="split"><div><div class="mut" style="font:600 11px var(--f-disp);letter-spacing:.14em;text-transform:uppercase">Seguimiento de la máquina</div><div style="font:700 24px var(--f-disp);letter-spacing:.03em">${esc(P.maq)}</div><div class="mut">${esc(mqSub(P))} · ${cutName(c)}: ${cutRange(c).toLowerCase()}</div></div>${propia(P)?'':`<div style="text-align:right"><div class="mut" style="font:600 11px var(--f-disp);letter-spacing:.14em;text-transform:uppercase">${c.cur?'Neto a pagar':'Neto liquidado'}</div><div class="gold" style="font:700 30px var(--f-disp)">${fmt(R.neto)}</div></div>`}</div><div class="bar" style="margin-top:14px"><button class="btn sm" data-act="dlRep" data-k="mq" data-id="${mid}">${ic('dl')}Descargar informe</button></div></div>
+ ${selBanner(c)}${retroKpis(R,true,c)}
  <h3 class="sech">Rendimiento diario</h3><div class="card">${hoursChart(R.h,P)}</div>
- ${registros(f,true)}`;
+ ${cortesCard(P,true)}
+ ${registros(c.f,c.t,true)}`;
 };
 SPV.rh=()=>{
  const P=curMq();let rows=LM('rh',P.id).slice().sort((a,b)=>b.fecha.localeCompare(a.fecha));
@@ -1275,6 +1291,7 @@ const ACT={
  tras:d=>formTras([d.id]),
  rtab:d=>{V.f.rtab=d.v;render()},
  mqSel:d=>{V.mq=d.id;render()},
+ cutSel:d=>{V.f.rcut=V.f.rcut||{};V.f.rcut[d.mq]=d.id||'';render();const r=document.querySelector('.cuts');if(d.id&&r)setTimeout(()=>document.querySelector('.rgs:not(.cuts)')?.scrollIntoView({behavior:'smooth',block:'start'}),60)},
  novSop:d=>{const r=byId('rh',d.id);if(r)formNov(r)},
  novN:d=>{const r=byId('rh',d.id);if(!r)return;if(canEdit())formNov(r);else toast('Soporte guardado en el Drive: '+r.fotoN3)},
  newMaq:()=>formMaq(),newOwn:()=>formOwn(),
@@ -1380,22 +1397,23 @@ const XLSX_URL='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min
 const DLF=[['pdf','PDF','Para imprimir o enviar por WhatsApp o correo'],['xlsx','Excel','Tablas con valores para seguir calculando'],['docx','Word','Documento editable con tablas'],['csv','CSV','Datos simples separados por punto y coma'],['html','Página web','Se abre en cualquier navegador y se puede imprimir']];
 const cTxt=(v,t)=>v==null||v===''?'':t==='date'&&/^\d{4}-\d\d-\d\d$/.test(v)?fd(v):typeof v!=='number'?String(v):t==='money'?fmt(v):t==='num'?fg(v):String(v);
 const slug=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'informe';
-function mqDoc(mid,all){
- const P=mqById(mid);const {f,lc}=retroPeriodo(mid);const desde=all?'':f;const R=retroCalc(desde,'',mid);const own=propia(P);
- const per=all?'Todo el historial':lc?'Periodo actual, desde el '+fd(f):'Periodo actual (sin liquidaciones cerradas)';
+function mqDoc(mid,pv){
+ const all=pv==='all';const P=mqById(mid);const cut=pv&&pv!=='per'&&!all?cutsOf(mid).find(c=>c.id===pv):null;const cc=cut||curCut(mid);
+ const desde=all?'':cc.f,hasta=all?'':cc.t;const R=retroCalc(desde,hasta,mid);const own=propia(P);
+ const per=all?'Todo el historial':cut?cutName(cut)+' · '+cutRange(cut).toLowerCase():'Periodo en curso · '+cutRange(cc).toLowerCase();
  const kpis=[['Horas trabajadas',fg(R.horas)+' h'],['Días trabajados',String(R.dias)],['Promedio por día',fg(R.prom)+' h'],['Días bajo el mínimo ('+fg(P.min)+' h)',String(R.bajo)]];
  if(own)kpis.push(['Repuestos y reparaciones',fmt(R.salM)],['Combustible y aceites',fmt(R.comb)],['Costo de operación',fmt(R.costoMina)]);
- else kpis.push(['Renta total ('+fmt(P.precio)+' por hora)',fmt(R.renta)],['Repuestos que asume el dueño',fmt(-R.repD)],...(R.combD?[['Combustible a cargo del dueño',fmt(-R.combD)]]:[]),['Neto a pagar al dueño',fmt(R.neto)]);
+ else kpis.push(['Renta total ('+fmt(P.precio)+' por hora)',fmt(R.renta)],['Repuestos que asume el dueño',fmt(-R.repD)],...(R.combD?[['Combustible a cargo del dueño',fmt(-R.combD)]]:[]),[cut?'Neto liquidado al dueño':'Neto a pagar al dueño',fmt(R.neto)]);
  const h=R.h.slice().sort((a,b)=>a.fecha.localeCompare(b.fecha));
  const cj=[{l:'Fecha',t:'date'},{l:'Horómetro inicio',t:'num'},{l:'Horómetro final',t:'num'},{l:'Horas',t:'num'},...(own?[]:[{l:'Valor del día',t:'money'}]),{l:'Operador',t:'text'},{l:'Novedad',t:'text'}];
  const secs=[{h:'Jornadas',cols:cj,rows:h.map(r=>[r.fecha,r.hi,enCurso(r)?'En curso':r.hf,enCurso(r)?'':r.horas,...(own?[]:[enCurso(r)?'':r.horas*P.precio]),r.operador||'',r.obs||'']),foot:['Total','','',R.horas,...(own?[]:[R.renta]),'','']}];
- const sal=LM('rs',mid).filter(r=>inP(r.fecha,desde,'')).sort((a,b)=>a.fecha.localeCompare(b.fecha));
+ const sal=LM('rs',mid).filter(r=>inP(r.fecha,desde,hasta)).sort((a,b)=>a.fecha.localeCompare(b.fecha));
  secs.push({h:'Repuestos y reparaciones',cols:[{l:'Fecha',t:'date'},{l:'Tipo',t:'text'},{l:'Concepto',t:'text'},{l:'Lo asume',t:'text'},{l:'Valor',t:'money'}],rows:sal.map(r=>[r.fecha,r.tipo||'',r.concepto||'',r.asume||'',r.valor]),foot:['Total','','','',sum(sal)]});
- const cb=LM('rc',mid).filter(r=>inP(r.fecha,desde,'')).sort((a,b)=>a.fecha.localeCompare(b.fecha));
+ const cb=LM('rc',mid).filter(r=>inP(r.fecha,desde,hasta)).sort((a,b)=>a.fecha.localeCompare(b.fecha));
  secs.push({h:'Combustible y aceites',cols:[{l:'Fecha',t:'date'},{l:'Tipo',t:'text'},{l:'Cantidad',t:'num'},{l:'Unidad',t:'text'},{l:'Horómetro',t:'num'},{l:'Valor',t:'money'}],rows:cb.map(r=>[r.fecha,r.tipo||'',r.cant||'',r.und||'',r.horo||'',r.valor]),foot:['Total','','','','',sum(cb)]});
  if(all&&!own){const cuts=LM('rcort',mid).slice().sort((a,b)=>a.fecha.localeCompare(b.fecha));let prev='';const rows=cuts.map(c=>{const d=prev?addDays(prev,1):'';const r=retroCalc(d,c.fecha,mid);prev=c.fecha;return [c.fecha,d?fd(d):'Inicio',r.horas,r.renta,-r.repD,r.neto,c.obs||'']});
   if(rows.length)secs.push({h:'Liquidaciones cerradas',cols:[{l:'Corte',t:'date'},{l:'Desde',t:'text'},{l:'Horas',t:'num'},{l:'Renta',t:'money'},{l:'Repuestos',t:'money'},{l:'Neto pagado',t:'money'},{l:'Observaciones',t:'text'}],rows})}
- return {title:'Informe de la máquina '+P.maq,sub:[[P.tipo,own?'Propia':P.dueno?'Dueño: '+P.dueno:'',P.serie].filter(Boolean).join(' · '),per+' · Generado el '+fd(today())],kpis,notes:[],secs,file:`informe-${slug(P.maq)}-${today()}`};
+ return {title:'Informe de la máquina '+P.maq,sub:[[P.tipo,own?'Propia':P.dueno?'Dueño: '+P.dueno:'',P.serie].filter(Boolean).join(' · '),per+' · Generado el '+fd(today())],kpis,notes:[],secs,file:`informe-${slug(P.maq)}-${cut?'corte-'+cut.n+'-'+cut.t:today()}`};
 }
 function genDoc(){
  const [f,t]=rangeNow();const R=report(f,t),T=R.T;const ins=insights(f,t);const py=pygRows(R);
@@ -1481,14 +1499,14 @@ function dlMenu(ctx){
  DLCTX=ctx;const mq=ctx.kind==='mq'?mqById(ctx.mid):null;const lc=mq?lastRetroCorte(mq.id):'';
  $('#sheet').classList.remove('wide');
  $('#sheet').innerHTML=`<div class="sh"><h2>Descargar informe</h2><button class="ib" data-act="close" aria-label="Cerrar">${ic('x')}</button></div><div class="sbd">
- ${mq?`<div class="fld"><label for="dlPer">${esc(mq.maq)}</label><select id="dlPer"><option value="per">Periodo actual${lc?' (desde '+fd(addDays(lc,1))+')':''}</option><option value="all">Todo el historial</option></select></div>`:`<p class="mut" style="margin:0">Periodo del ${fd(rangeNow()[0])} al ${fd(rangeNow()[1])}. Cámbialo con los filtros de Informes.</p>`}
+ ${mq?`<div class="fld"><label for="dlPer">${esc(mq.maq)}</label><select id="dlPer"><option value="per">En curso${lc?' (desde '+fd(addDays(lc,1))+')':''}</option>${cutsOf(mq.id).slice().reverse().map(c=>`<option value="${c.id}" ${selCut(mq.id).id===c.id?'selected':''}>${cutName(c)} · ${cutRange(c).toLowerCase()}</option>`).join('')}<option value="all">Todo el historial</option></select></div>`:`<p class="mut" style="margin:0">Periodo del ${fd(rangeNow()[0])} al ${fd(rangeNow()[1])}. Cámbialo con los filtros de Informes.</p>`}
  <div class="dlg">${DLF.map(([k,l,d])=>`<button class="dlo" data-act="dlGo" data-k="${k}"><span class="dlx dlx-${k}">${k==='docx'?'DOC':k==='html'?'WEB':k.toUpperCase()}</span><span><b>${l}</b><small>${d}</small></span></button>`).join('')}</div></div>`;
  $('#modal').hidden=false;
 }
 async function dlGo(k){
- const c=DLCTX;if(!c)return;const all=$('#dlPer')?.value==='all';
+ const c=DLCTX;if(!c)return;const pv=$('#dlPer')?.value||'per';const all=pv==='all';
  if(c.kind==='gen'&&k==='pdf')return exportPdf();if(c.kind==='gen'&&k==='xlsx')return exportXlsx();
- const D=c.kind==='mq'?mqDoc(c.mid,all):genDoc();if(c.kind==='mq'&&all)D.file+='-historial';
+ const D=c.kind==='mq'?mqDoc(c.mid,pv):genDoc();if(c.kind==='mq'&&all)D.file+='-historial';
  try{toast('Preparando '+DLF.find(x=>x[0]===k)[1]+'…');const blob=k==='pdf'?await rPdf(D):k==='xlsx'?await rXlsx(D):k==='docx'?rDocx(D):k==='csv'?rCsv(D):rHtml(D);dl(blob,`${D.file}.${k}`)}
  catch(e){toast(/cargar/.test(e.message)?'Se necesita internet la primera vez para generar '+(k==='pdf'?'PDF':'Excel'):'No se pudo generar el archivo: '+e.message)}
 }
