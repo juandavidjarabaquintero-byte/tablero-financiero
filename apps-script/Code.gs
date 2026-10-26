@@ -41,9 +41,9 @@ const SCHEMA = {
   cortes: {tab: 'APP Cortes de oro', req: null, cols: [
     ['Fecha', 'fecha', 'd', 0], ['Oro (g)', 'gramos', 'n', 0], ['Precio por gramo', 'precio', 'n', 0], ['Valor total', 'total', 'n', 0],
     ['Dueño de la mina', 'invCop', 'n', 0], ['Abono a costos', 'abono', 'n', 0], ['Reparto', '_rep', 'calc', 0], ['Observaciones', 'obs', 't', 1]]},
-  rh: {tab: 'APP Retro horas', req: ['fecha', 'hi', 'hf'], cols: [
+  rh: {tab: 'APP Retro horas', req: ['fecha', 'hi'], cols: [
     ['Fecha', 'fecha', 'd', 1], ['Horómetro inicio', 'hi', 'n', 1], ['Horómetro final', 'hf', 'n', 1], ['Horas', 'horas', 'n', 0],
-    ['Operador', 'operador', 't', 1], ['Novedad', 'obs', 't', 1], ['Foto', 'fotoUrl', 'link', 0]]},
+    ['Operador', 'operador', 't', 1], ['Novedad', 'obs', 't', 1], ['Foto', 'fotoUrl', 'link', 0], ['Foto final', 'fotoUrl2', 'link', 0]]},
   rs: {tab: 'APP Retro repuestos', req: ['fecha', 'concepto', 'valor'], cols: [
     ['Fecha', 'fecha', 'd', 1], ['Tipo', 'tipo', 't', 1], ['Concepto', 'concepto', 't', 1], ['Valor', 'valor', 'n', 1],
     ['Lo asume', 'asume', 't', 1], ['Soporte', 'fotoUrl', 'link', 0]]},
@@ -222,7 +222,10 @@ function headerMap_(sh) {
 
 function loadTab_(ss, c) {
   const sh = tab_(ss, c);
-  const hm = headerMap_(sh);
+  let hm = headerMap_(sh);
+  const want = SCHEMA[c].cols.map(function (x) { return x[0]; }).concat(TECH);
+  const miss = want.filter(function (h) { return hm[h] == null; });
+  if (miss.length) { const lc = sh.getLastColumn(); sh.getRange(1, lc + 1, 1, miss.length).setValues([miss]).setFontWeight('bold').setBackground('#131b4d').setFontColor('#ffffff'); hm = headerMap_(sh); }
   const width = sh.getLastColumn();
   const n = sh.getLastRow();
   const rows = n > 1 ? sh.getRange(2, 1, n - 1, width).getValues() : [];
@@ -233,6 +236,16 @@ function isEmptyRow_(row) { for (let i = 0; i < row.length; i++) if (row[i] !== 
 function isYes_(v) { return v === true || /^(s[ií]|true|x|1)$/i.test(String(v || '').trim()); }
 function norm_(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim(); }
 
+function num_(s) {
+  const c = s.lastIndexOf(','), d = s.lastIndexOf('.');
+  let x;
+  if (c >= 0 && d >= 0) x = c > d ? s.replace(/\./g, '').replace(',', '.') : s.replace(/,/g, '');
+  else if (c >= 0) x = /^-?\d{1,3}(,\d{3})+$/.test(s) ? s.replace(/,/g, '') : s.replace(',', '.');
+  else if (d >= 0) x = /^-?\d{1,3}(\.\d{3})+$/.test(s) ? s.replace(/\./g, '') : s;
+  else x = s;
+  return parseFloat(x) || 0;
+}
+
 function fromCell_(v, t, T, rec) {
   if (t === 'd') {
     if (v instanceof Date) return Utilities.formatDate(v, T.tz, 'yyyy-MM-dd');
@@ -241,7 +254,7 @@ function fromCell_(v, t, T, rec) {
     m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return m[0];
     return undefined;
   }
-  if (t === 'n') { if (typeof v === 'number') return v; const s = String(v || '').replace(/[^\d,.\-]/g, ''); if (!s) return 0; return parseFloat(s.indexOf(',') >= 0 ? s.replace(/\./g, '').replace(',', '.') : s.replace(/\.(?=\d{3}(\D|$))/g, '')) || 0; }
+  if (t === 'n') { if (typeof v === 'number') return v; const s = String(v || '').replace(/[^\d,.\-]/g, ''); if (!s) return 0; return num_(s); }
   if (t === 'bool') return isYes_(v);
   if (t === 'proj') { const k = Object.keys(MODS).filter(function (k) { return norm_(MODS[k].name) === norm_(v); })[0]; return k || rec.p; }
   if (t === 'sub') { const p = rec.p; if (!p || !MODS[p]) return rec.s; const k = Object.keys(MODS[p].subs).filter(function (s) { return norm_(MODS[p].subs[s]) === norm_(v); })[0]; return k || rec.s; }
@@ -258,7 +271,7 @@ function toCell_(rec, k, t, ctx, c) {
   if (t === 'proj') return MODS[rec.p] ? MODS[rec.p].name : (rec.p || '');
   if (t === 'sub') return MODS[rec.p] && MODS[rec.p].subs[rec.s] ? MODS[rec.p].subs[rec.s] : (rec.s || '');
   if (t === 'nat') return NATL[rec.nat] || rec.nat || '';
-  if (t === 'link') return rec.fotoUrl || rec.fotoN || '';
+  if (t === 'link') return rec[k] || (k === 'fotoUrl' ? rec.fotoN : rec.fotoN2) || '';
   if (t === 'ref') return refText_(c, rec, ctx);
   if (t === 'sc') return scText_(rec.sc, ctx);
   if (t === 'calc') return calc_(c, k, rec, ctx);
@@ -313,7 +326,8 @@ function rowToRec_(T, row) {
   try { rec = JSON.parse(g('Datos') || '{}') || {}; } catch (e) { rec = {}; }
   sc.cols.forEach(function (col) {
     if (!col[3] || T.hm[col[0]] == null) return;
-    const v = fromCell_(g(col[0]), col[2], T, rec);
+    const raw = g(col[0]);
+    const v = T.c === 'rh' && col[1] === 'hf' && (raw === '' || raw == null) ? '' : fromCell_(raw, col[2], T, rec);
     if (v !== undefined) rec[col[1]] = v;
   });
   const id = String(g('ID') || '').trim();
@@ -322,6 +336,7 @@ function rowToRec_(T, row) {
   rec.srv = Number(g('Servidor')) || 0;
   rec.del = isYes_(g('Borrado'));
   if (T.c === 'rh' && rec.hf !== '' && rec.hi !== '' && rec.hf != null && rec.hi != null) rec.horas = Math.round(((Number(rec.hf) || 0) - (Number(rec.hi) || 0)) * 100) / 100;
+  if (T.c === 'rh' && (rec.hf === '' || rec.hf == null)) rec.horas = 0;
   return rec;
 }
 
@@ -451,10 +466,12 @@ function sync_(body, role) {
       const cur = IDX[c][rec.id];
       if (cur && (Number(cur.upd) || 0) > (Number(rec.upd) || 0)) { rej++; delete seen[c + ':' + rec.id]; force[c + ':' + rec.id] = 1; return; }
       const nr = clean_(rec); nr.srv = now;
+      if (cur && cur.lk && !nr.lk) nr.lk = cur.lk;
       if (cur) { const i = cur.__i; Object.keys(cur).forEach(function (k) { delete cur[k]; }); Object.assign(cur, nr); cur.__i = i; }
       else { nr.__i = -1; R[c].push(nr); IDX[c][nr.id] = nr; }
       T[c].dirty = true; acc++;
     });
+    try { if (legacy_(ss, R, T, now)) acc++; } catch (e) { console.error('legacy', e); }
     if (acc) { ctx = ctx_(R); if (T.abonos.dirty) T.prest.dirty = true; ['inm', 'veh', 'cab', 'per', 'eq', 'prest'].forEach(function (c) { if (T[c].dirty) { T.mov.dirty = true; T.obl.dirty = true; T.abonos.dirty = true; } }); }
     COLLS.forEach(function (c) { if (T[c].dirty) writeTab_(T[c], R[c], ctx); });
     const since = Number(body.since) || 0;
@@ -468,6 +485,68 @@ function sync_(body, role) {
     });
     return {ok: true, serverTime: now, changes: out, accepted: acc, rejected: rej, role: role, scope: R0.scope};
   } finally { lock.releaseLock(); }
+}
+
+/* ===================== Puente con la pestaña RETROEXCAVADORA anterior ===================== */
+// Importa lo que se siga anotando en la pestaña vieja: jornadas (A:J), salidas (K:P) y combustible (R:X).
+function legacy_(ss, R, T, now) {
+  const sh = ss.getSheetByName('RETROEXCAVADORA');
+  if (!sh) return false;
+  const last = sh.getLastRow();
+  if (last < 12) return false;
+  const v = sh.getRange(12, 1, last - 11, 24).getValues();
+  const tz = ss.getSpreadsheetTimeZone();
+  const T0 = {tz: tz};
+  const d = function (x) { return fromCell_(x, 'd', T0, {}) || ''; };
+  const n = function (x) { return x === '' || x === null ? '' : fromCell_(x, 'n', T0, {}); };
+  const s = function (x) { return String(x == null ? '' : x).trim(); };
+  let changed = false;
+  const index = function (c) { const m = {}; R[c].forEach(function (r) { if (r.lk) m[r.lk] = r; }); return m; };
+  const claim = function (c, lk, keyOf, key) {
+    const byLk = index(c);
+    if (byLk[lk]) return byLk[lk];
+    const r = R[c].filter(function (x) { return !x.lk && keyOf(x) === key; })[0];
+    if (r) { r.lk = lk; T[c].dirty = true; }
+    return r || null;
+  };
+  const add = function (c, rec) { rec.id = Utilities.getUuid(); rec.cre = now; rec.upd = now; rec.srv = now; rec.by = 'tablero anterior'; rec.__i = -1; R[c].push(rec); T[c].dirty = true; changed = true; };
+  const seen = {rh: {}, rs: {}, rc: {}};
+  const occ = function (c, key) { seen[c][key] = (seen[c][key] || 0) + 1; return seen[c][key] - 1; };
+  v.forEach(function (row) {
+    const fh = d(row[0]);
+    if (fh && row[1] !== '') {
+      const hi = n(row[1]), hf = n(row[2]);
+      const key = fh + '|' + hi;
+      const lk = 'rh|' + key + '|' + occ('rh', key);
+      const r = claim('rh', lk, function (x) { return x.fecha + '|' + Number(x.hi); }, fh + '|' + Number(hi));
+      const obs = s(row[8]);
+      if (!r) add('rh', {fecha: fh, hi: hi, hf: hf === '' ? '' : hf, horas: hf === '' ? 0 : Math.round((hf - hi) * 100) / 100, operador: s(row[5]), obs: obs, fotoN: s(row[6]), fotoN2: s(row[7]), lk: lk});
+      else {
+        let up = false;
+        if ((r.hf === '' || r.hf == null) && hf !== '') { r.hf = hf; r.horas = Math.round((hf - Number(r.hi)) * 100) / 100; up = true; }
+        if (!r.obs && obs) { r.obs = obs; up = true; }
+        if (!r.fotoN2 && s(row[7]) && !r.foto2) { r.fotoN2 = s(row[7]); up = true; }
+        if (up) { r.upd = now; r.srv = now; T.rh.dirty = true; changed = true; }
+      }
+    }
+    const fs = d(row[10]);
+    if (fs && row[13] !== '') {
+      const val = n(row[13]), tipo = s(row[11]) || 'Repuesto';
+      const key = fs + '|' + tipo + '|' + val;
+      const lk = 'rs|' + key + '|' + occ('rs', key);
+      const r = claim('rs', lk, function (x) { return x.fecha + '|' + x.tipo + '|' + Number(x.valor); }, key);
+      if (!r) add('rs', {fecha: fs, tipo: tipo, concepto: s(row[12]), valor: val, asume: s(row[14]) || 'Dueño', fotoN: s(row[15]), lk: lk});
+    }
+    const fc = d(row[17]);
+    if (fc && row[21] !== '') {
+      const val = n(row[21]), tipo = s(row[18]) || 'ACPM';
+      const key = fc + '|' + tipo + '|' + val;
+      const lk = 'rc|' + key + '|' + occ('rc', key);
+      const r = claim('rc', lk, function (x) { return x.fecha + '|' + x.tipo + '|' + Number(x.valor); }, key);
+      if (!r) add('rc', {fecha: fc, tipo: tipo, cant: n(row[19]) || '', und: s(row[20]) || 'gal', valor: val, horo: n(row[22]), fotoN: s(row[23]), lk: lk});
+    }
+  });
+  return changed;
 }
 
 /* ===================== Soportes y fotos en Drive ===================== */
