@@ -1841,6 +1841,7 @@ async function exportPdf(){
 }
 
 /* ---------- sincronización (Apps Script) ---------- */
+const NEWC=['maq','own','fnd','fmov'];
 const COLLS=['mov','prest','abonos','cab','veh','inm','per','cortes','rh','rs','rc','rcort','cats','eq','obl','maq','own','fnd','fmov'];
 function migrate(){
  COLLS.forEach(c=>{if(!Array.isArray(S[c]))S[c]=[]});if(!Array.isArray(S.outbox))S.outbox=[];
@@ -1921,13 +1922,15 @@ async function sync(manual){
    const changes=items.map(toChange).filter(Boolean);
    const j=await api('sync',{since:S.cfg.pushedAll===S.cfg.url||!canPush()?(S.lastSync||0):0,changes});
    applyScope(j);
-   S.outbox=canPush()?S.outbox.filter(o=>!items.some(s=>s.c===o.c&&s.id===o.id&&s.t>=o.t)):[];
+   const known=Array.isArray(j.colls)?j.colls:null;const unk=c=>c!=='cfgx'&&(known?!known.includes(c):NEWC.includes(c));
+   S.outbox=canPush()?S.outbox.filter(o=>unk(o.c)||!items.some(s=>s.c===o.c&&s.id===o.id&&s.t>=o.t)):[];
+   if(known&&canPush()){const prev=S.cfg.srvColls;const add=COLLS.filter(c=>known.includes(c)&&(prev?!prev.includes(c):NEWC.includes(c)));const t0=Date.now();add.forEach(c=>(S[c]||[]).forEach(r=>{if(r.id&&!S.outbox.some(o=>o.c===c&&o.id===r.id))S.outbox.push({c,id:r.id,t:t0})}));S.cfg.srvColls=known}
    (j.changes||[]).forEach(mergeIn);got+=(j.changes||[]).length;sent+=j.accepted||0;
    if(Array.isArray(j.mqs)){const ok=new Set(j.mqs);S.maq=S.maq.filter(m=>ok.has(m.id));['rh','rs','rc','rcort'].forEach(c=>S[c]=S[c].filter(r=>ok.has(mqOf(r))));S.own=S.own.filter(o=>o.id===j.own)}
    if(full)S.cfg.pushedAll=S.cfg.url;
    S.lastSync=j.serverTime||Date.now();S.cfg.syncErr='';save();
    const up=await uploadPhotos();
-   if(!up&&!S.outbox.length)break;
+   if(!up&&!S.outbox.some(o=>!unk(o.c)))break;
   }
   const since=Date.now()-(S.cfg.lastReport||0);
   if(canPush()&&(((got||sent)&&since>600000)||since>3600e3||(manual&&(got||sent)))){try{await api('report',{data:buildReport()});S.cfg.lastReport=Date.now()}catch(e){}}

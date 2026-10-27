@@ -561,7 +561,7 @@ function sync_(body, role, own) {
         if (since === 0 || (Number(rec.srv) || 0) > since || force[c + ':' + rec.id] || fresh) out.push({c: c, rec: clean_(rec)});
       });
     });
-    const res = {ok: true, serverTime: now, changes: out, accepted: acc, rejected: rej, role: role, scope: R0.scope, own: own || ''};
+    const res = {ok: true, serverTime: now, changes: out, accepted: acc, rejected: rej, role: role, scope: R0.scope, own: own || '', colls: COLLS};
     if (mine) res.mqs = Object.keys(mine);
     return res;
   } finally { lock.releaseLock(); }
