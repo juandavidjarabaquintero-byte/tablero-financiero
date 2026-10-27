@@ -33,3 +33,9 @@ Para ver las claves otra vez: ejecuta la función `verClaves`. Para cambiarlas t
 - Para agregar un gasto desde el Sheet, escribe una fila nueva en **APP Movimientos** con Fecha, Proyecto, Rubro y Valor (Proyecto, Rubro y Clasificación tienen lista desplegable).
 - Para eliminar un registro, escribe **Sí** en la columna **Borrado**. No borres filas.
 - La pestaña **INFORME CONTADOR** se reescribe sola; no la edites.
+
+## Fondos y anticipos
+
+- **APP Fondos**: compradores y proveedores con anticipo, con entregado, legalizado, devuelto y saldo (se calculan solos).
+- **APP Fondos movimientos**: entregas, reembolsos, recargas y devoluciones. Se registran desde la app.
+- En **APP Movimientos**, la columna **Pagado con** muestra si la compra salió del fondo de un comprador o del anticipo de un proveedor.

@@ -27,7 +27,7 @@ const SCHEMA = {
     ['Fecha', 'fecha', 'd', 1], ['Proyecto', 'p', 'proj', 1], ['Rubro', 's', 'sub', 1], ['Clasificación', 'nat', 'nat', 1],
     ['Categoría', 'cat', 't', 1], ['Concepto', 'concepto', 't', 1], ['Proveedor / beneficiario', 'tercero', 't', 1],
     ['Cédula / NIT', 'cedula', 't', 1], ['Valor', 'valor', 'n', 1], ['Forma de pago', 'pago', 't', 1], ['Responsable', 'resp', 't', 1],
-    ['Asociado a', '_ref', 'ref', 1], ['Detalle', '_det', 'calc', 0], ['Observaciones', 'nota', 't', 1], ['Soporte', 'fotoUrl', 'link', 0]]},
+    ['Asociado a', '_ref', 'ref', 1], ['Detalle', '_det', 'calc', 0], ['Observaciones', 'nota', 't', 1], ['Soporte', 'fotoUrl', 'link', 0], ['Pagado con', '_fnd', 'calc', 0]]},
   prest: {tab: 'APP Préstamos', req: ['fecha', 'nombre', 'valor'], cols: [
     ['Fecha', 'fecha', 'd', 1], ['Nombre', 'nombre', 't', 1], ['Cédula', 'cedula', 't', 1], ['Celular', 'tel', 't', 1],
     ['Valor prestado', 'valor', 'n', 1], ['Abonos', '_ab', 'calc', 0], ['Saldo', '_saldo', 'calc', 0], ['Interés mensual %', 'interes', 'n', 1],
@@ -55,6 +55,13 @@ const SCHEMA = {
     ['Máquina', 'maq', 't', 1], ['Tipo', 'tipo', 't', 1], ['Propiedad', 'prop', 't', 1], ['Dueño', 'dueno', 't', 0],
     ['Precio por hora', 'precio', 'n', 1], ['Mínimo horas por día', 'min', 'n', 1], ['Alerta %', 'alerta', 'n', 1], ['Combustible a cargo del dueño %', 'pctComb', 'n', 1],
     ['Placa o serie', 'serie', 't', 1], ['Inactiva', 'inactivo', 'bool', 1], ['Foto', 'fotoUrl', 'link', 0]]},
+  fnd: {tab: 'APP Fondos', req: null, cols: [
+    ['Tipo', '_tipo', 'calc', 0], ['Nombre', 'nombre', 't', 1], ['Proyecto', '_proj', 'calc', 0], ['Celular', 'tel', 't', 1],
+    ['Entregado', '_ent', 'calc', 0], ['Legalizado', '_comp', 'calc', 0], ['Devuelto', '_dev', 'calc', 0], ['Saldo', '_saldo', 'calc', 0],
+    ['Avisar si el saldo baja de', 'min', 'n', 1], ['Días para legalizar', 'dias', 'n', 1], ['Inactivo', 'inactivo', 'bool', 1], ['Nota', 'nota', 't', 1]]},
+  fmov: {tab: 'APP Fondos movimientos', req: null, cols: [
+    ['Fecha', 'fecha', 'd', 1], ['Fondo', '_fnd', 'calc', 0], ['Movimiento', '_tipo', 'calc', 0], ['Valor', 'valor', 'n', 1],
+    ['Forma de pago', 'pago', 't', 1], ['Nota', 'nota', 't', 1], ['Soporte', 'fotoUrl', 'link', 0]]},
   own: {tab: 'APP Propietarios', req: ['nombre'], cols: [['Nombre', 'nombre', 't', 1], ['Celular', 'tel', 't', 1], ['Cédula / NIT', 'cedula', 't', 1], ['Máquinas', '_maqs', 'calc', 0]]},
   veh: {tab: 'APP Vehículos', req: ['placa'], cols: [
     ['Placa', 'placa', 't', 1], ['Tipo', 'tipoV', 't', 1], ['Marca y modelo', 'desc', 't', 1], ['Año', 'anio', 't', 1],
@@ -134,7 +141,8 @@ function tab_(ss, c) {
       const r = sh.getRange(2, i + 1, Math.max(1, maxR - 1), 1);
       if (col[2] === 'd') r.setNumberFormat('dd/mm/yyyy');
       if (col[2] === 'n' && /valor|saldo|abono|precio|presupuesto|pago mensual|acordado|dueño de la mina/i.test(col[0])) r.setNumberFormat('$#,##0');
-      if (col[2] === 'calc' && /abonos|saldo/i.test(col[0])) r.setNumberFormat('$#,##0');
+      if (col[2] === 'calc' && /abonos|saldo|entregado|legalizado|devuelto/i.test(col[0])) r.setNumberFormat('$#,##0');
+      if (col[2] === 'n' && /avisar/i.test(col[0])) r.setNumberFormat('$#,##0');
       sh.setColumnWidth(i + 1, /concepto|observ|nota|reparto|detalle|resumen|proveedor/i.test(col[0]) ? 240 : 130);
     });
     const t0 = sc.cols.length + 1;
@@ -330,6 +338,15 @@ function money_(n) { return '$' + Math.round(Number(n) || 0).toString().replace(
 function calc_(c, k, r, ctx) {
   if (c === 'mov' && k === '_det') return r.arrTipo ? 'Arriendo: ' + r.arrTipo + (r.arrDesc ? ' · ' + r.arrDesc : '') + (r.arrMes ? ' · ' + r.arrMes : '') : '';
   if (c === 'prest' && k === '_ab') return ctx.ab[r.id] || 0;
+  if (c === 'mov' && k === '_fnd') { const f = ctx.fnd[r.fnd]; return f ? (f.tipo === 'proveedor' ? 'Anticipo en ' : 'Fondo de ') + f.nombre : ''; }
+  if (c === 'fnd') {
+    const st = ctx.fs[r.id] || {ent: 0, dev: 0, comp: 0};
+    if (k === '_tipo') return r.tipo === 'proveedor' ? 'Proveedor con anticipo' : 'Comprador';
+    if (k === '_proj') return r.p === 'inm' ? (ctx.inm[r.inm] ? ctx.inm[r.inm].nombre : 'Inmuebles') : (MODS[r.p] ? MODS[r.p].name : r.p || '');
+    if (k === '_ent') return st.ent; if (k === '_comp') return st.comp; if (k === '_dev') return st.dev; if (k === '_saldo') return st.ent - st.dev - st.comp;
+  }
+  if (c === 'fmov' && k === '_fnd') { const f = ctx.fnd[r.fnd]; return f ? f.nombre : ''; }
+  if (c === 'fmov' && k === '_tipo') return {entrega: 'Entrega para compras', reemb: 'Reembolso de compras', recarga: 'Recarga del anticipo', devol: 'Devolución'}[r.tipo] || r.tipo || '';
   if (c === 'own' && k === '_maqs') return Object.keys(ctx.maq).filter(function (id) { return ctx.maq[id].own === r.id; }).map(function (id) { return ctx.maq[id].maq; }).join(', ');
   if (c === 'prest' && k === '_saldo') return (Number(r.valor) || 0) - (ctx.ab[r.id] || 0);
   if (c === 'cortes' && k === '_rep') return (r.liq || []).map(function (l) { return l.label + (l.nombre ? ' (' + l.nombre + ')' : '') + ': ' + money_(l.cop); }).join('; ');
@@ -387,7 +404,11 @@ function clean_(rec) {
 
 function ctx_(R) {
   const ctx = {ab: {}};
-  ['inm', 'veh', 'cab', 'per', 'eq', 'prest', 'maq', 'own'].forEach(function (c) { ctx[c] = {}; R[c].forEach(function (r) { if (r.id && !r.del) ctx[c][r.id] = r; }); });
+  ['inm', 'veh', 'cab', 'per', 'eq', 'prest', 'maq', 'own', 'fnd'].forEach(function (c) { ctx[c] = {}; R[c].forEach(function (r) { if (r.id && !r.del) ctx[c][r.id] = r; }); });
+  ctx.fs = {};
+  const fs = function (id) { return ctx.fs[id] = ctx.fs[id] || {ent: 0, dev: 0, comp: 0}; };
+  R.fmov.forEach(function (x) { if (!x.del && x.fnd) { if (x.tipo === 'devol') fs(x.fnd).dev += Number(x.valor) || 0; else fs(x.fnd).ent += Number(x.valor) || 0; } });
+  R.mov.forEach(function (x) { if (!x.del && x.fnd) fs(x.fnd).comp += Number(x.valor) || 0; });
   R.abonos.forEach(function (a) { if (!a.del && a.prest) ctx.ab[a.prest] = (ctx.ab[a.prest] || 0) + (Number(a.valor) || 0); });
   return ctx;
 }
@@ -511,7 +532,7 @@ function sync_(body, role, own) {
       T[c].dirty = true; acc++;
     });
     try { if (legacy_(ss, R, T, now)) acc++; } catch (e) { console.error('legacy', e); }
-    if (acc) { ctx = ctx_(R); if (T.abonos.dirty) T.prest.dirty = true; ['inm', 'veh', 'cab', 'per', 'eq', 'prest'].forEach(function (c) { if (T[c].dirty) { T.mov.dirty = true; T.obl.dirty = true; T.abonos.dirty = true; } }); }
+    if (acc) { ctx = ctx_(R); if (T.abonos.dirty) T.prest.dirty = true; ['inm', 'veh', 'cab', 'per', 'eq', 'prest'].forEach(function (c) { if (T[c].dirty) { T.mov.dirty = true; T.obl.dirty = true; T.abonos.dirty = true; } }); if (T.fmov.dirty || T.mov.dirty) T.fnd.dirty = true; if (T.fnd.dirty) { T.fmov.dirty = true; T.mov.dirty = true; } }
     COLLS.forEach(function (c) { if (T[c].dirty) writeTab_(T[c], R[c], ctx); });
     const since = Number(body.since) || 0;
     const out = [];
