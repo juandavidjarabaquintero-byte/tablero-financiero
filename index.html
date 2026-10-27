@@ -721,7 +721,7 @@ function catChips(cats,key){
  const cur=V.f[key]||'';const [m,sb]=key.split('.');const cus=customCats(m,sb).map(c=>c.name);
  return `<div class="chips"><button class="chip ${!cur?'on':''}" data-act="fcat" data-k="${key}" data-v="">Todas</button>${cats.map(c=>`<button class="chip ${cur===c?'on':''}" data-act="fcat" data-k="${key}" data-v="${esc(c)}"${cus.includes(c)?' title="Categoría personalizada"':''}>${esc(c)}${cus.includes(c)?' ·':''}</button>`).join('')}<button class="chip edit-only" data-act="newCat" data-m="${m}" data-s="${sb}">+ Categoría</button></div>`;
 }
-function toolbar(btns,mov=true){return `<div class="bar">${btns}${mov?`<button class="btn gh edit-only" data-act="selMode">${ic('check')}${V.sel?'Cancelar selección':'Seleccionar'}</button>${V.sel&&PICK.size?`<button class="btn pri edit-only" data-act="trasSel">${ic('move')}Trasladar ${PICK.size}</button>`:''}`:''}<input class="search" id="q" placeholder="Buscar concepto, nombre o cédula" aria-label="Buscar"></div>`}
+function tbar(btns,mov=true){return `<div class="bar">${btns}${mov?`<button class="btn gh edit-only" data-act="selMode">${ic('check')}${V.sel?'Cancelar selección':'Seleccionar'}</button>${V.sel&&PICK.size?`<button class="btn pri edit-only" data-act="trasSel">${ic('move')}Trasladar ${PICK.size}</button>`:''}`:''}<input class="search" id="q" placeholder="Buscar concepto, nombre o cédula" aria-label="Buscar"></div>`}
 
 /* ---------- vista genérica de un rubro ---------- */
 function inmSel(){
@@ -740,7 +740,7 @@ function vGen(m,sub){
  const mes=sum(all.filter(r=>r.fecha.startsWith(thisMonth())));
  const nat=sub.nat;
  return pre+`<div class="grid k4">${kpi('Total acumulado',fmt(sum(all)),`${all.length} registros`,nat==='inversion'?'c-vi':nat==='costo'?'c-wa':'c-ba')}${kpi('Este mes',fmt(mes),MES[new Date().getMonth()]+' '+new Date().getFullYear(),'c-cy')}${extraK(m,sub,all)}${kpi('Último registro',all.length?fd(all.map(r=>r.fecha).sort().pop()):'—','Clasificación: '+NATL[nat],'c-te')}</div>
- ${arrCard(all)}<div class="card">${toolbar(`<button class="btn pri edit-only" data-act="newMov" data-m="${m}" data-s="${sub.id}">${ic('plus')}Registrar</button>`)}<div style="margin:12px 0">${catChips(cats,key)}</div>${movTable(rows,{tl:sub.tl})}</div>`;
+ ${arrCard(all)}<div class="card">${tbar(`<button class="btn pri edit-only" data-act="newMov" data-m="${m}" data-s="${sub.id}">${ic('plus')}Registrar</button>`)}<div style="margin:12px 0">${catChips(cats,key)}</div>${movTable(rows,{tl:sub.tl})}</div>`;
 }
 
 function extraK(m,sub,all){
@@ -760,20 +760,20 @@ SPV.veh=()=>{
  return `<div class="grid k4">${kpi('Gastado en vehículos',fmt(sum(rows.filter(r=>r.nat==='gasto'))),`${rows.length} pagos`,'c-ba')}${kpi('Vehículos',vs.length,'Con foto: '+vs.filter(v=>v.foto).length,'c-cy')}${nextOblKpi('veh')}</div>
  <div class="card"><h3>Vehículos<span class="r"><button class="btn sm edit-only" data-act="newVeh">${ic('plus')}Agregar vehículo</button></span></h3><div class="ent">${vs.map(v=>{const g=rows.filter(r=>r.veh===v.id);const so=L('obl').find(o=>o.aid===v.id&&o.tipo==='SOAT'&&!o.done),te=L('obl').find(o=>o.aid===v.id&&o.tipo==='Revisión técnico-mecánica'&&!o.done);
   return assetCard('veh',v,`<span>SOAT</span><span>${so?oblTag(so,1):'<span class="tag">Sin fecha</span>'}</span><span>Tecnomecánica</span><span>${te?oblTag(te,1):'<span class="tag">Sin fecha</span>'}</span><span>Gastado</span><span>${fmt(sum(g))}</span>`,`<button class="btn sm pri edit-only" data-act="newMov" data-m="personal" data-s="vehiculos" data-veh="${v.id}">${ic('plus')}Registrar pago</button>`)}).join('')||'<div class="empty">Agrega tu primer vehículo.</div>'}</div></div>
- <div class="card"><h3>Pagos de vehículos</h3>${toolbar('')}<div style="margin:12px 0">${catChips(catsOf('personal','vehiculos'),'personal.vehiculos')}</div>${movTable(V.f['personal.vehiculos']?rows.filter(r=>r.cat===V.f['personal.vehiculos']):rows,{tl:'Proveedor'})}</div>`;
+ <div class="card"><h3>Pagos de vehículos</h3>${tbar('')}<div style="margin:12px 0">${catChips(catsOf('personal','vehiculos'),'personal.vehiculos')}</div>${movTable(V.f['personal.vehiculos']?rows.filter(r=>r.cat===V.f['personal.vehiculos']):rows,{tl:'Proveedor'})}</div>`;
 };
 SPV.cab=()=>{
  const cs=L('cab');const rows=L('mov').filter(r=>r.p==='parcela'&&r.s==='caballos');
  return `<div class="grid k4">${kpi('Gastado en caballos',fmt(sum(rows.filter(r=>r.nat==='gasto'))),`${rows.length} pagos`,'c-ba')}${kpi('Invertido en caballos',fmt(sum(rows.filter(r=>r.nat==='inversion'))),'Compras de caballos','c-vi')}${nextOblKpi('cab')}</div>
  <div class="card"><h3>Caballos<span class="r"><button class="btn sm edit-only" data-act="newCab">${ic('plus')}Agregar caballo</button></span></h3><div class="ent">${cs.map(c=>{const g=rows.filter(r=>r.cab===c.id);const by={};g.forEach(r=>by[r.cat]=(by[r.cat]||0)+r.valor);
  return assetCard('cab',c,`${Object.entries(by).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([k,v])=>`<span>${esc(k)}</span><span>${fmt(v)}</span>`).join('')}<span><b>Total</b></span><span><b>${fmt(sum(g))}</b></span>`,`<button class="btn sm pri edit-only" data-act="newMov" data-m="parcela" data-s="caballos" data-cab="${c.id}">${ic('plus')}Registrar gasto</button>`)}).join('')||'<div class="empty">Agrega tu primer caballo.</div>'}</div></div>
- <div class="card"><h3>Gastos de caballos</h3>${toolbar('')}<div style="margin:12px 0">${catChips(catsOf('parcela','caballos'),'parcela.caballos')}</div>${movTable(V.f['parcela.caballos']?rows.filter(r=>r.cat===V.f['parcela.caballos']):rows,{tl:'Proveedor / jinete'})}</div>`;
+ <div class="card"><h3>Gastos de caballos</h3>${tbar('')}<div style="margin:12px 0">${catChips(catsOf('parcela','caballos'),'parcela.caballos')}</div>${movTable(V.f['parcela.caballos']?rows.filter(r=>r.cat===V.f['parcela.caballos']):rows,{tl:'Proveedor / jinete'})}</div>`;
 };
 SPV.eqv=()=>{
  const es=L('eq');const rows=L('mov').filter(r=>r.p==='mina'&&r.s==='activos');const mant=L('mov').filter(r=>r.p==='mina'&&r.eq&&r.s!=='activos');const fc=V.f['mina.activos'];
  return `<div class="grid k4">${kpi('Invertido en activos',fmt(sum(rows)),`${rows.length} compras`,'c-vi')}${kpi('Equipos registrados',es.length,'Con foto: '+es.filter(e=>e.foto).length,'c-cy')}${kpi('Mantenimiento de equipos',fmt(sum(mant)),'Costos vinculados a equipos','c-wa')}${nextOblKpi('eq')}</div>
  <div class="card"><h3>Equipos de la mina<span class="r"><button class="btn sm edit-only" data-act="newEq">${ic('plus')}Agregar equipo</button></span></h3><div class="ent">${es.map(e=>assetCard('eq',e,`<span>Tipo</span><span>${esc(e.tipo||'—')}</span><span>Valor de compra</span><span>${e.valor?fmt(e.valor):'—'}</span><span>Mantenimiento</span><span>${fmt(sum(mant.filter(r=>r.eq===e.id)))}</span>`,`<button class="btn sm pri edit-only" data-act="newMov" data-m="mina" data-s="herramientas" data-eq="${e.id}" data-cat="Mantenimiento">${ic('tool')}Mantenimiento</button>`)).join('')||'<div class="empty">Registra tus plantas, motobombas, motores y clasificadoras.</div>'}</div></div>
- <div class="card"><h3>Compras de activos</h3>${toolbar(`<button class="btn pri edit-only" data-act="newMov" data-m="mina" data-s="activos">${ic('plus')}Registrar compra</button>`)}<div style="margin:12px 0">${catChips(catsOf('mina','activos'),'mina.activos')}</div>${movTable(fc?rows.filter(r=>r.cat===fc):rows)}</div>`;
+ <div class="card"><h3>Compras de activos</h3>${tbar(`<button class="btn pri edit-only" data-act="newMov" data-m="mina" data-s="activos">${ic('plus')}Registrar compra</button>`)}<div style="margin:12px 0">${catChips(catsOf('mina','activos'),'mina.activos')}</div>${movTable(fc?rows.filter(r=>r.cat===fc):rows)}</div>`;
 };
 SPV.nom=()=>{
  const isInm=V.m==='inm';let pre='';if(isInm)pre=inmSel();
@@ -785,7 +785,7 @@ SPV.nom=()=>{
  <div class="kv">${isInm?`<span>Valor acordado</span><span>${ac?fmt(ac):'—'}</span>`:`<span>Salario mensual</span><span>${x.salario?fmt(x.salario):'—'}</span>`}<span>Adelantos</span><span>${fmt(ade)}</span><span>Total pagado</span><span>${fmt(pag)}</span>${isInm&&ac?`<span>Saldo por pagar</span><span class="${ac-pag<0?'neg':'gold'}">${fmt(ac-pag)}</span>`:''}</div>
  ${isInm&&ac?`<div class="meter"><i style="width:${Math.min(100,pag/ac*100)}%"></i></div>`:''}
  <div class="bar"><button class="btn sm pri edit-only" data-act="newNom" data-per="${x.id}">${ic('cash')}Pagar / adelanto</button><button class="btn sm gh edit-only" data-act="edit" data-c="per" data-id="${x.id}">${ic('edit')}</button></div></div>`}).join('')||'<div class="empty">Agrega la primera persona para registrar sus pagos.</div>'}</div></div>
- <div class="card"><h3>Historial de pagos</h3>${toolbar('')}<div style="height:10px"></div>${movTable(rows,{tl:'Persona'})}</div>`;
+ <div class="card"><h3>Historial de pagos</h3>${tbar('')}<div style="height:10px"></div>${movTable(rows,{tl:'Persona'})}</div>`;
 };
 SPV.nomM=()=>{
  const pers=L('per').filter(x=>x.sc==='mina');
@@ -800,7 +800,7 @@ SPV.nomM=()=>{
  return `<div class="ec"><div class="hd"><div><b>${esc(x.nombre)}</b><small>${esc(x.rol)}${x.cedula?' · CC '+esc(x.cedula):''}</small></div><span class="tag ${ro.part?'anticipo':''}">${ro.part?(ro.part==='emp'?pct+'% compartido':pct+'%'):'Sin %'}</span></div>
  <div class="kv">${ro.mensual?`<span>Pago mensual</span><span>${x.salario?fmt(x.salario):'—'}</span>`:''}${ro.part?`<span>Anticipos pendientes</span><span class="gold">${fmt(anticiposPend(x.id))}</span><span>Participación recibida</span><span>${fmt(part)}</span>`:''}<span>Pagos y coleros</span><span>${fmt(sum(g.filter(r=>r.nat==='costo')))}</span></div>
  <div class="bar"><button class="btn sm pri edit-only" data-act="newNom" data-per="${x.id}">${ic('cash')}${ro.part&&!ro.mensual?'Anticipo / colero':'Pagar'}</button><button class="btn sm gh edit-only" data-act="edit" data-c="per" data-id="${x.id}">${ic('edit')}</button></div></div>`}).join('')}</div></div>
- <div class="card"><h3>Historial de pagos de nómina</h3>${toolbar('')}<div style="height:10px"></div>${movTable(rows,{tl:'Persona'})}</div>`;
+ <div class="card"><h3>Historial de pagos de nómina</h3>${tbar('')}<div style="height:10px"></div>${movTable(rows,{tl:'Persona'})}</div>`;
 };
 SPV.cortes=()=>{
  const cs=L('cortes').slice().sort((a,b)=>b.fecha.localeCompare(a.fecha));
@@ -915,7 +915,7 @@ SPV.rdue=()=>{
 };
 SPV.rh=()=>{
  const P=curMq();let rows=LM('rh',P.id).slice().sort((a,b)=>b.fecha.localeCompare(a.fecha));
- return `${mqSel(false)}<div class="card">${toolbar(`<button class="btn pri edit-only" data-act="newRh">${ic('plus')}Registrar día</button>`,false)}<div style="height:10px"></div>
+ return `${mqSel(false)}<div class="card">${tbar(`<button class="btn pri edit-only" data-act="newRh">${ic('plus')}Registrar día</button>`,false)}<div style="height:10px"></div>
  <div class="tw"><table class="t cards"><thead><tr><th>Fecha</th><th class="n">Horómetro inicio</th><th class="n">Horómetro final</th><th class="n">Horas</th><th class="n">Valor día</th><th>Operador</th><th>Novedad</th><th></th></tr></thead><tbody>
  ${rows.filter(r=>!V.q||[r.obs,r.operador].join(' ').toLowerCase().includes(V.q.toLowerCase())).map(r=>`<tr class="rw"><td class="p num">${fd(r.fecha)}</td><td data-l="Inicio" class="n">${fg(r.hi)}</td><td data-l="Final" class="n">${enCurso(r)?'…':fg(r.hf)}</td><td class="n ${r.horas>0&&r.horas<P.min?'neg':''}">${enCurso(r)?'<span class="pl" style="color:#8b7bff;border-color:#8b7bff66">En curso</span>':fg(r.horas)+' h'}</td><td data-l="Valor" class="n">${enCurso(r)?'—':fmt(r.horas*P.precio)}</td><td data-l="Operador">${esc(r.operador||'')}</td><td data-l="Novedad">${esc(r.obs||'')}</td>${rowActs('rh',r.id,(r.foto||!r.fotoN?photoBtn(r):`<span class="ib" style="opacity:.6" title="Foto del horómetro en el Drive: ${esc(r.fotoN)}">${ic('cam')}</span>`)+novBtn(r))}</tr>`).join('')}
  </tbody><tfoot><tr><td colspan="3">${rows.length} días</td><td class="n">${fg(sum(rows,r=>r.horas))} h</td><td class="n">${fmt(sum(rows,r=>r.horas)*P.precio)}</td><td colspan="3"></td></tr></tfoot></table></div></div>`;
@@ -923,14 +923,14 @@ SPV.rh=()=>{
 SPV.rs=()=>{
  const rows=LM('rs',curMq().id).slice().sort((a,b)=>b.fecha.localeCompare(a.fecha)).filter(r=>!V.q||r.concepto.toLowerCase().includes(V.q.toLowerCase()));
  return `${mqSel(false)}<div class="grid k4">${kpi('Asume el dueño',fmt(sum(rows.filter(r=>r.asume!=='Mina'))),'Se descuenta de la renta','c-wa')}${kpi('Asume la mina',fmt(sum(rows.filter(r=>r.asume==='Mina'))),'Costo de la mina','c-ba')}</div>
- <div class="card">${toolbar(`<button class="btn pri edit-only" data-act="newRs">${ic('plus')}Registrar salida</button>`,false)}<div style="height:10px"></div><div class="tw"><table class="t cards"><thead><tr><th>Fecha</th><th>Tipo</th><th>Concepto</th><th>Asume</th><th class="n">Valor</th><th></th></tr></thead><tbody>
+ <div class="card">${tbar(`<button class="btn pri edit-only" data-act="newRs">${ic('plus')}Registrar salida</button>`,false)}<div style="height:10px"></div><div class="tw"><table class="t cards"><thead><tr><th>Fecha</th><th>Tipo</th><th>Concepto</th><th>Asume</th><th class="n">Valor</th><th></th></tr></thead><tbody>
  ${rows.map(r=>`<tr class="rw"><td class="num" data-l="Fecha">${fd(r.fecha)}</td><td data-l="Tipo">${esc(r.tipo)}</td><td class="p">${esc(r.concepto)}</td><td data-l="Asume"><span class="tag ${r.asume==='Mina'?'ok':'wa'}">${esc(r.asume)}</span></td><td class="n">${fmt(r.valor)}</td>${rowActs('rs',r.id,photoBtn(r))}</tr>`).join('')}</tbody><tfoot><tr><td colspan="4">${rows.length} registros</td><td class="n">${fmt(sum(rows))}</td><td></td></tr></tfoot></table></div></div>`;
 };
 SPV.rc=()=>{
  const P=curMq();const rows=LM('rc',P.id).slice().sort((a,b)=>b.fecha.localeCompare(a.fecha));
  const gal=sum(rows.filter(r=>r.tipo==='ACPM'),r=>r.cant);
  return `${mqSel(false)}<div class="grid k4">${kpi('Total combustible y aceites',fmt(sum(rows)),propia(P)?'Máquina propia':(100-(P.pctComb||0))+'% a cargo de la mina','c-vi')}${kpi('ACPM',fg(gal)+' gal',gal?fmt(sum(rows.filter(r=>r.tipo==='ACPM'))/gal)+' por galón':'','c-cy')}</div>
- <div class="card">${toolbar(`<button class="btn pri edit-only" data-act="newRc">${ic('plus')}Registrar tanqueo</button>`,false)}<div style="height:10px"></div><div class="tw"><table class="t cards"><thead><tr><th>Fecha</th><th>Tipo</th><th class="n">Cantidad</th><th class="n">Horómetro</th><th class="n">Valor</th><th></th></tr></thead><tbody>
+ <div class="card">${tbar(`<button class="btn pri edit-only" data-act="newRc">${ic('plus')}Registrar tanqueo</button>`,false)}<div style="height:10px"></div><div class="tw"><table class="t cards"><thead><tr><th>Fecha</th><th>Tipo</th><th class="n">Cantidad</th><th class="n">Horómetro</th><th class="n">Valor</th><th></th></tr></thead><tbody>
  ${rows.map(r=>`<tr class="rw"><td class="num" data-l="Fecha">${fd(r.fecha)}</td><td class="p">${esc(r.tipo)}</td><td data-l="Cant." class="n">${fg(r.cant)} ${esc(r.und||'')}</td><td data-l="Horómetro" class="n">${r.horo?fg(r.horo):'—'}</td><td class="n">${fmt(r.valor)}</td>${rowActs('rc',r.id,photoBtn(r))}</tr>`).join('')}</tbody><tfoot><tr><td colspan="4">${rows.length} registros</td><td class="n">${fmt(sum(rows))}</td><td></td></tr></tfoot></table></div></div>`;
 };
 
@@ -981,6 +981,7 @@ function alerts(){
  L('obl').filter(o=>!o.done&&assetOf(o)&&!assetOf(o).del).sort((x,z)=>x.fecha.localeCompare(z.fecha)).forEach(o=>{const n=ASSET[o.ac].name(assetOf(o));if(o.fecha<t)a.push(['ba',`${n}: ${oblName(o)} vencido desde ${fd(o.fecha)}.`]);else if(o.fecha<=lim)a.push(['',`${n}: ${oblName(o)} vence el ${fd(o.fecha)}.`])});
  L('veh').forEach(v=>['SOAT','Revisión técnico-mecánica'].forEach(tp=>{const o=L('obl').find(o=>o.aid===v.id&&o.tipo===tp&&!o.done);if(!o||o.est)a.push(['',`${v.placa}: ${o?'confirma':'registra'} la fecha de ${tp==='SOAT'?'vencimiento del SOAT':'la revisión técnico-mecánica'} en la ficha del vehículo.`])}));
  mqList().filter(m=>!m.inactivo).forEach(m=>{const {f}=retroPeriodo(m.id);const R=retroCalc(f,'',m.id);if(R.bajo)a.push(['',`${m.maq}: ${R.bajo} días por debajo de ${fg(m.min)} horas en el periodo actual.`]);const op=LM('rh',m.id).filter(enCurso);if(op.length&&op[0].fecha<addDays(today(),-1))a.push(['',`${m.maq}: la jornada del ${fd(op[0].fecha)} sigue en curso. Ciérrala con el horómetro final.`])});
+ if(srvOld()&&['admin','aux'].includes(S.cfg.tokRole))a.unshift(['ba','El servicio de Apps Script está desactualizado: algunos datos no se guardan en el Sheet. Pega el Code.gs más reciente y crea una nueva versión de la implementación.']);
  a.push(...fAlerts());
  const ant=sum(L('per').filter(p=>p.sc==='mina'),p=>anticiposPend(p.id));if(ant)a.push(['',`Mina: ${fmt(ant)} en anticipos por descontar en el próximo corte.`]);
  const pend=minaPendiente();if(pend)a.push(['ba',`Mina: ${fmt(pend)} en costos aún sin cubrir con cortes de oro.`]);
@@ -1033,7 +1034,7 @@ function vAjustes(){
  <div class="fld w"><label for="pin">PIN de administrador</label><input id="pin" type="password" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="${c.pin?'PIN guardado (escribe uno nuevo para cambiarlo)':'Sin PIN'}" value="" ${S.cfg.role!=='admin'?'disabled':''}><div class="hint">Se pide para volver a Administrador desde otro perfil.</div></div>
  </div><div class="bar" style="margin-top:12px"><button class="btn pri" data-act="savePin">Guardar PIN</button></div></div>
  <div class="card"><h3>Sincronización con Google Drive</h3>
- <div class="kv" style="margin-bottom:12px"><span>Conexión</span><span>${navigator.onLine?'<span class="tag ok">En línea</span>':'<span class="tag wa">Sin señal</span>'}</span><span>Perfil de la clave</span><span>${c.tokRole?ROLES[c.tokRole]:'—'}</span><span>Cambios por enviar</span><span>${pend}</span><span>Fotos por subir</span><span>${pendingPhotos().length}</span><span>Última sincronización</span><span>${S.lastSync?new Date(S.lastSync).toLocaleString('es-CO'):'Nunca'}</span></div>${c.syncErr?`<div class="al ba" style="margin-bottom:10px"><i></i><div>${esc(c.syncErr)}</div></div>`:''}
+ <div class="kv" style="margin-bottom:12px"><span>Conexión</span><span>${navigator.onLine?'<span class="tag ok">En línea</span>':'<span class="tag wa">Sin señal</span>'}</span><span>Servicio de Apps Script</span><span>${!c.tokRole?'—':srvOld()?'<span class="tag ba">Desactualizado</span>':'<span class="tag ok">Al día</span>'}</span><span>Perfil de la clave</span><span>${c.tokRole?ROLES[c.tokRole]:'—'}</span><span>Cambios por enviar</span><span>${pend}</span><span>Fotos por subir</span><span>${pendingPhotos().length}</span><span>Última sincronización</span><span>${S.lastSync?new Date(S.lastSync).toLocaleString('es-CO'):'Nunca'}</span></div>${c.syncErr?`<div class="al ba" style="margin-bottom:10px"><i></i><div>${esc(c.syncErr)}</div></div>`:''}
  <div class="fg"><div class="fld w"><label for="surl">Enlace del servicio (Apps Script)</label><input id="surl" placeholder="https://script.google.com/macros/s/…/exec" value="${esc(c.url)}"></div><div class="fld"><label for="stok">Clave de acceso</label><input id="stok" value="${esc(c.token)}" placeholder="Ej. ADM-1a2b3c4d5e6f" autocomplete="off"></div><div class="fld"><label for="ssheet">Enlace del Sheet para el contador</label><input id="ssheet" value="${esc(c.sheetUrl)}"></div></div>
  <div class="bar" style="margin-top:12px"><button class="btn pri" data-act="saveSync">Guardar y conectar</button><button class="btn" data-act="sync">${ic('sync')}Sincronizar ahora</button>${c.tokRole==='admin'?`<button class="btn gh" data-act="resend">Enviar todo de nuevo</button>`:''}</div>
  <p class="note" style="margin:12px 0 0">Todo se guarda primero en este equipo y funciona sin internet. Al volver la señal, los cambios se envían solos al Sheet y se reciben los que se hayan hecho en el Drive.</p></div></div>
@@ -1645,7 +1646,7 @@ function vMovs(){
  <div class="chips"><button class="chip ${!fp?'on':''}" data-act="mf" data-k="mp" data-v="">Todos los proyectos</button>${projs.map(([k,l])=>`<button class="chip ${fp===k?'on':''}" data-act="mf" data-k="mp" data-v="${k}">${esc(l)}</button>`).join('')}</div>
  ${subsOf.length?`<div class="chips" style="margin-top:8px"><button class="chip ${!fs?'on':''}" data-act="mf" data-k="ms" data-v="">Todos los rubros</button>${subsOf.map(([k,l])=>`<button class="chip ${fs===k?'on':''}" data-act="mf" data-k="ms" data-v="${k}">${esc(l)}</button>`).join('')}</div>`:''}
  <div class="chips" style="margin-top:8px">${[['','Toda clasificación'],['gasto','Gastos'],['costo','Costos'],['inversion','Inversiones'],['anticipo','Anticipos']].map(([k,l])=>`<button class="chip ${fn===k?'on':''}" data-act="mf" data-k="mn" data-v="${k}">${l}</button>`).join('')}<button class="chip ${V.f.mo?'on':''}" data-act="mf" data-k="mo" data-v="${V.f.mo?'':'1'}">Solo “Otros” o sin categoría (${sinCat.length})</button></div></div>
- <div class="card">${toolbar('')}<div style="height:10px"></div>${movTable(V.f.mo?rows.filter(r=>!r.cat||/^otros?$/i.test(r.cat)):rows,{full:1})}</div>`;
+ <div class="card">${tbar('')}<div style="height:10px"></div>${movTable(V.f.mo?rows.filter(r=>!r.cat||/^otros?$/i.test(r.cat)):rows,{full:1})}</div>`;
 }
 const DEST=()=>MOD.flatMap(m=>(m.subs||[]).filter(x=>x.cats).map(x=>[m.id+'.'+x.id,m.name+' › '+x.name]));
 function formTras(ids){
@@ -1842,6 +1843,9 @@ async function exportPdf(){
 
 /* ---------- sincronización (Apps Script) ---------- */
 const NEWC=['maq','own','fnd','fmov'];
+const SRV_MIN=20261027;let MANIF_OK=false;
+const manifest=()=>{const m={};COLLS.forEach(c=>{const o={};(S[c]||[]).forEach(r=>{if(r.id)o[r.id]=r.del?-(r.upd||1):(r.upd||0)});m[c]=o});return m};
+const srvOld=()=>!!(S.cfg.url&&S.cfg.tokRole&&(S.cfg.srvVer||0)<SRV_MIN);
 const COLLS=['mov','prest','abonos','cab','veh','inm','per','cortes','rh','rs','rc','rcort','cats','eq','obl','maq','own','fnd','fmov'];
 function migrate(){
  COLLS.forEach(c=>{if(!Array.isArray(S[c]))S[c]=[]});if(!Array.isArray(S.outbox))S.outbox=[];
@@ -1916,25 +1920,29 @@ async function sync(manual){
  SYNCING=true;renderStatus();let got=0,sent=0;
  try{
   if(S.cfg.scopeUrl!==S.cfg.url||!S.cfg.tokRole)applyScope(await api('ping'));
-  for(let pass=0;pass<3;pass++){
+  const pull0=S.cfg.clientColls!==COLLS.join(',');
+  for(let pass=0;pass<4;pass++){
    const full=canPush()&&S.cfg.pushedAll!==S.cfg.url;
    const items=full?allItems():(canPush()?S.outbox.slice():[]);
    const changes=items.map(toChange).filter(Boolean);
-   const j=await api('sync',{since:S.cfg.pushedAll===S.cfg.url||!canPush()?(S.lastSync||0):0,changes});
-   applyScope(j);
+   const sendM=canPush()&&pass===0&&(manual||!MANIF_OK);
+   const j=await api('sync',Object.assign({since:pull0&&pass===0||!(S.cfg.pushedAll===S.cfg.url||!canPush())?0:(S.lastSync||0),changes},sendM?{manifest:manifest()}:{}));
+   applyScope(j);S.cfg.srvVer=j.ver||0;
+   if(Array.isArray(j.need)){MANIF_OK=true;const t0=Date.now();j.need.forEach(x=>{if(byId(x.c,x.id)&&!S.outbox.some(o=>o.c===x.c&&o.id===x.id))S.outbox.push({c:x.c,id:x.id,t:t0})})}
    const known=Array.isArray(j.colls)?j.colls:null;const unk=c=>c!=='cfgx'&&(known?!known.includes(c):NEWC.includes(c));
    S.outbox=canPush()?S.outbox.filter(o=>unk(o.c)||!items.some(s=>s.c===o.c&&s.id===o.id&&s.t>=o.t)):[];
    if(known&&canPush()){const prev=S.cfg.srvColls;const add=COLLS.filter(c=>known.includes(c)&&(prev?!prev.includes(c):NEWC.includes(c)));const t0=Date.now();add.forEach(c=>(S[c]||[]).forEach(r=>{if(r.id&&!S.outbox.some(o=>o.c===c&&o.id===r.id))S.outbox.push({c,id:r.id,t:t0})}));S.cfg.srvColls=known}
    (j.changes||[]).forEach(mergeIn);got+=(j.changes||[]).length;sent+=j.accepted||0;
    if(Array.isArray(j.mqs)){const ok=new Set(j.mqs);S.maq=S.maq.filter(m=>ok.has(m.id));['rh','rs','rc','rcort'].forEach(c=>S[c]=S[c].filter(r=>ok.has(mqOf(r))));S.own=S.own.filter(o=>o.id===j.own)}
    if(full)S.cfg.pushedAll=S.cfg.url;
+   if(pull0&&pass===0)S.cfg.clientColls=COLLS.join(',');
    S.lastSync=j.serverTime||Date.now();S.cfg.syncErr='';save();
    const up=await uploadPhotos();
    if(!up&&!S.outbox.some(o=>!unk(o.c)))break;
   }
   const since=Date.now()-(S.cfg.lastReport||0);
   if(canPush()&&(((got||sent)&&since>600000)||since>3600e3||(manual&&(got||sent)))){try{await api('report',{data:buildReport()});S.cfg.lastReport=Date.now()}catch(e){}}
-  save();if(manual)toast(got||sent?`Sincronizado: ${sent} enviados, ${got} recibidos`:'Todo al día con Drive');
+  save();if(manual)toast(srvOld()&&S.cfg.tokRole==='admin'?'El Apps Script está desactualizado: pega el Code.gs más reciente y crea una nueva versión.':got||sent?`Sincronizado: ${sent} enviados, ${got} recibidos`:'Todo al día con Drive');
  }catch(e){S.cfg.syncErr=e.message||'Error';save();if(manual)toast(S.cfg.syncErr)}
  SYNCING=false;render();
 }

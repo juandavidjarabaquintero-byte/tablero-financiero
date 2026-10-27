@@ -10,6 +10,7 @@
  *  4. Copia la URL de la aplicación web y la clave que muestra el registro de ejecución.
  */
 
+const VERSION = 20261027;
 const CFG = {
   SHEET_ID: '1ggJdlmDgeIXk0o0W41a9pRzUtoiHNmZOvs5IT0KSpTk',
   FOLDER_ID: '1pk6m_2pQ6HL6RBlJjWK2bNVr6sAiChGH',
@@ -208,7 +209,7 @@ function doPost(e) {
     if (!who) return json_({ok: false, error: 'Clave de acceso no válida'});
     const role = who.role;
     const R = ROLES[role];
-    if (body.op === 'ping') return json_({ok: true, role: role, scope: R.scope, own: who.own || '', serverTime: Date.now()});
+    if (body.op === 'ping') return json_({ok: true, role: role, scope: R.scope, own: who.own || '', serverTime: Date.now(), ver: VERSION});
     if (body.op === 'sync') return json_(sync_(body, role, who.own));
     if (body.op === 'ownerKey') { if (role !== 'admin') return json_({ok: false, error: 'Solo el administrador gestiona las claves de los dueños'}); return json_(ownerKey_(body)); }
     if (body.op === 'file') { if (!R.write) return json_({ok: false, error: 'Sin permiso de escritura'}); return json_(saveFile_(body)); }
@@ -534,6 +535,14 @@ function sync_(body, role, own) {
       else { nr.__i = -1; R[c].push(nr); IDX[c][nr.id] = nr; }
       T[c].dirty = true; acc++;
     });
+    const need = [];
+    if (R0.write && body.manifest && typeof body.manifest === 'object') {
+      Object.keys(body.manifest).forEach(function (c) {
+        if (COLLS.indexOf(c) < 0 || c === 'cfgx') return;
+        const m = body.manifest[c] || {};
+        Object.keys(m).forEach(function (id) { const v = Number(m[id]) || 0, del = v < 0, u = Math.abs(v); const cur = IDX[c][id]; if (!cur ? !del : (Number(cur.upd) || 0) < u) need.push({c: c, id: id}); });
+      });
+    }
     try { if (legacy_(ss, R, T, now)) acc++; } catch (e) { console.error('legacy', e); }
     if (acc) { ctx = ctx_(R); if (T.abonos.dirty) T.prest.dirty = true; ['inm', 'veh', 'cab', 'per', 'eq', 'prest'].forEach(function (c) { if (T[c].dirty) { T.mov.dirty = true; T.obl.dirty = true; T.abonos.dirty = true; } }); if (T.fmov.dirty || T.mov.dirty || T.rs.dirty || T.rc.dirty) T.fnd.dirty = true; if (T.fnd.dirty) { T.fmov.dirty = true; T.mov.dirty = true; T.rs.dirty = true; T.rc.dirty = true; } }
     COLLS.forEach(function (c) { if (T[c].dirty) writeTab_(T[c], R[c], ctx); });
@@ -561,7 +570,8 @@ function sync_(body, role, own) {
         if (since === 0 || (Number(rec.srv) || 0) > since || force[c + ':' + rec.id] || fresh) out.push({c: c, rec: clean_(rec)});
       });
     });
-    const res = {ok: true, serverTime: now, changes: out, accepted: acc, rejected: rej, role: role, scope: R0.scope, own: own || '', colls: COLLS};
+    const res = {ok: true, serverTime: now, changes: out, accepted: acc, rejected: rej, role: role, scope: R0.scope, own: own || '', colls: COLLS, ver: VERSION};
+    if (body.manifest) res.need = need.slice(0, 3000);
     if (mine) res.mqs = Object.keys(mine);
     return res;
   } finally { lock.releaseLock(); }
