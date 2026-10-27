@@ -46,10 +46,10 @@ const SCHEMA = {
     ['Operador', 'operador', 't', 1], ['Novedad', 'obs', 't', 1], ['Foto', 'fotoUrl', 'link', 0], ['Foto final', 'fotoUrl2', 'link', 0], ['Máquina', 'mq', 'mq', 1], ['Soporte novedad', 'fotoUrl3', 'link', 0]]},
   rs: {tab: 'APP Retro repuestos', req: ['fecha', 'concepto', 'valor'], cols: [
     ['Fecha', 'fecha', 'd', 1], ['Tipo', 'tipo', 't', 1], ['Concepto', 'concepto', 't', 1], ['Valor', 'valor', 'n', 1],
-    ['Lo asume', 'asume', 't', 1], ['Soporte', 'fotoUrl', 'link', 0], ['Máquina', 'mq', 'mq', 1]]},
+    ['Lo asume', 'asume', 't', 1], ['Soporte', 'fotoUrl', 'link', 0], ['Máquina', 'mq', 'mq', 1], ['Pagado con', '_fnd', 'calc', 0]]},
   rc: {tab: 'APP Retro combustible', req: ['fecha', 'valor'], cols: [
     ['Fecha', 'fecha', 'd', 1], ['Tipo', 'tipo', 't', 1], ['Cantidad', 'cant', 'n', 1], ['Unidad', 'und', 't', 1],
-    ['Valor', 'valor', 'n', 1], ['Horómetro', 'horo', 'n', 1], ['Soporte', 'fotoUrl', 'link', 0], ['Máquina', 'mq', 'mq', 1]]},
+    ['Valor', 'valor', 'n', 1], ['Horómetro', 'horo', 'n', 1], ['Soporte', 'fotoUrl', 'link', 0], ['Máquina', 'mq', 'mq', 1], ['Pagado con', '_fnd', 'calc', 0]]},
   rcort: {tab: 'APP Retro liquidaciones', req: null, cols: [['Fecha de corte', 'fecha', 'd', 1], ['Observaciones', 'obs', 't', 1], ['Máquina', 'mq', 'mq', 0]]},
   maq: {tab: 'APP Máquinas', req: ['maq'], cols: [
     ['Máquina', 'maq', 't', 1], ['Tipo', 'tipo', 't', 1], ['Propiedad', 'prop', 't', 1], ['Dueño', 'dueno', 't', 0],
@@ -338,11 +338,14 @@ function money_(n) { return '$' + Math.round(Number(n) || 0).toString().replace(
 function calc_(c, k, r, ctx) {
   if (c === 'mov' && k === '_det') return r.arrTipo ? 'Arriendo: ' + r.arrTipo + (r.arrDesc ? ' · ' + r.arrDesc : '') + (r.arrMes ? ' · ' + r.arrMes : '') : '';
   if (c === 'prest' && k === '_ab') return ctx.ab[r.id] || 0;
-  if (c === 'mov' && k === '_fnd') { const f = ctx.fnd[r.fnd]; return f ? (f.tipo === 'proveedor' ? 'Anticipo en ' : 'Fondo de ') + f.nombre : ''; }
+  if ((c === 'mov' || c === 'rs' || c === 'rc') && k === '_fnd') { const f = ctx.fnd[r.fnd]; return f ? (f.tipo === 'proveedor' ? 'Anticipo en ' : 'Fondo de ') + f.nombre : ''; }
   if (c === 'fnd') {
     const st = ctx.fs[r.id] || {ent: 0, dev: 0, comp: 0};
     if (k === '_tipo') return r.tipo === 'proveedor' ? 'Proveedor con anticipo' : 'Comprador';
-    if (k === '_proj') return r.p === 'inm' ? (ctx.inm[r.inm] ? ctx.inm[r.inm].nombre : 'Inmuebles') : (MODS[r.p] ? MODS[r.p].name : r.p || '');
+    if (k === '_proj') {
+      const ks = Array.isArray(r.ps) && r.ps.length ? r.ps : [r.p === 'inm' ? 'inm:' + (r.inm || '') : r.p];
+      return ks.map(function (x) { if (String(x).indexOf('inm:') === 0) { const i = ctx.inm[x.slice(4)]; return i ? i.nombre : 'Inmuebles'; } return x === 'retro' ? 'Maquinaria' : MODS[x] ? MODS[x].name : x; }).join(', ');
+    }
     if (k === '_ent') return st.ent; if (k === '_comp') return st.comp; if (k === '_dev') return st.dev; if (k === '_saldo') return st.ent - st.dev - st.comp;
   }
   if (c === 'fmov' && k === '_fnd') { const f = ctx.fnd[r.fnd]; return f ? f.nombre : ''; }
@@ -408,7 +411,7 @@ function ctx_(R) {
   ctx.fs = {};
   const fs = function (id) { return ctx.fs[id] = ctx.fs[id] || {ent: 0, dev: 0, comp: 0}; };
   R.fmov.forEach(function (x) { if (!x.del && x.fnd) { if (x.tipo === 'devol') fs(x.fnd).dev += Number(x.valor) || 0; else fs(x.fnd).ent += Number(x.valor) || 0; } });
-  R.mov.forEach(function (x) { if (!x.del && x.fnd) fs(x.fnd).comp += Number(x.valor) || 0; });
+  ['mov', 'rs', 'rc'].forEach(function (c) { R[c].forEach(function (x) { if (!x.del && x.fnd) fs(x.fnd).comp += Number(x.valor) || 0; }); });
   R.abonos.forEach(function (a) { if (!a.del && a.prest) ctx.ab[a.prest] = (ctx.ab[a.prest] || 0) + (Number(a.valor) || 0); });
   return ctx;
 }
@@ -532,7 +535,7 @@ function sync_(body, role, own) {
       T[c].dirty = true; acc++;
     });
     try { if (legacy_(ss, R, T, now)) acc++; } catch (e) { console.error('legacy', e); }
-    if (acc) { ctx = ctx_(R); if (T.abonos.dirty) T.prest.dirty = true; ['inm', 'veh', 'cab', 'per', 'eq', 'prest'].forEach(function (c) { if (T[c].dirty) { T.mov.dirty = true; T.obl.dirty = true; T.abonos.dirty = true; } }); if (T.fmov.dirty || T.mov.dirty) T.fnd.dirty = true; if (T.fnd.dirty) { T.fmov.dirty = true; T.mov.dirty = true; } }
+    if (acc) { ctx = ctx_(R); if (T.abonos.dirty) T.prest.dirty = true; ['inm', 'veh', 'cab', 'per', 'eq', 'prest'].forEach(function (c) { if (T[c].dirty) { T.mov.dirty = true; T.obl.dirty = true; T.abonos.dirty = true; } }); if (T.fmov.dirty || T.mov.dirty || T.rs.dirty || T.rc.dirty) T.fnd.dirty = true; if (T.fnd.dirty) { T.fmov.dirty = true; T.mov.dirty = true; T.rs.dirty = true; T.rc.dirty = true; } }
     COLLS.forEach(function (c) { if (T[c].dirty) writeTab_(T[c], R[c], ctx); });
     const since = Number(body.since) || 0;
     const out = [];

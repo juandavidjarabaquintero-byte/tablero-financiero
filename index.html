@@ -1111,7 +1111,7 @@ function formMov(m,s,rec={},extra={}){
   {k:'concepto',l:'Concepto',v:rec.concepto,req:1,ph:'Qué se compró o pagó'},
   {k:'tercero',l:sub?.tl||(isArr(rec)?'Arrendador':'Proveedor / beneficiario'),v:rec.tercero,list:tercs},{k:'cedula',l:'Cédula o NIT',v:rec.cedula,ph:'Opcional'},
   {k:'pago',l:'Forma de pago',t:'select',opts:PAGOS,v:rec.pago||'Efectivo'},{k:'resp',l:'Responsable',v:rec.resp,ph:'Quién lo registró o pagó'});
- const fopts=L('fnd').filter(f=>f.p===m&&(m!=='inm'||!f.inm||f.inm===(rec.inm||extra.inm||V.inm))&&(!f.inactivo||f.id===rec.fnd));
+ const fopts=L('fnd').filter(f=>fFor(f,m,rec.inm||extra.inm||V.inm)&&(!f.inactivo||f.id===rec.fnd));
  const hasF=fopts.length||rec.fnd||extra.fnd;
  if(hasF)fields.splice(2,0,{k:'fnd',l:'Pagado con',t:'select',blank:'Pago directo',opts:fopts.map(f=>[f.id,(isProv(f)?'Anticipo en ':'Fondo de ')+f.nombre+' · saldo '+fmt(fStats(f).saldo-(rec.fnd===f.id?(rec.valor||0)*-1:0))]),v:rec.fnd||extra.fnd||'',w:1,hint:'Si lo compró el encargado con el recurso entregado, o se retiró del anticipo en el proveedor.'});
  const VMAP={'SOAT':'SOAT','Seguro todo riesgo':'Seguro todo riesgo','Tecnomecánica':'Revisión técnico-mecánica'};
@@ -1194,8 +1194,9 @@ function formRh(rec={}){
   if(!rec.id&&open&&LM('rh',mid).some(r=>enCurso(r))){toast('Ya hay una jornada en curso. Ciérrala antes de iniciar otra.');return false}
   v.mq=mid;upsert('rh',Object.assign({id:rec.id},v));return open?'Jornada iniciada':closing?'Jornada cerrada':'Jornada registrada'}});
 }
-function formRs(rec={}){const P=mqById(rec.id?mqOf(rec):curMq().id);openForm({title:(rec.id?'Editar salida':'Repuesto o reparación')+(mqList().length>1?' · '+P.maq:''),rec,fields:[{k:'fecha',l:'Fecha',t:'date',v:rec.fecha||today(),req:1},{k:'tipo',l:'Tipo',t:'select',opts:['Repuesto','Reparación','Salario','Otro'],v:rec.tipo||'Repuesto'},{k:'concepto',l:'Concepto',v:rec.concepto,req:1,w:1},{k:'valor',l:'Valor',t:'money',v:rec.valor??'',req:1},{k:'asume',l:'Lo asume',t:'select',opts:['Dueño','Mina'],v:rec.asume||(propia(P)?'Mina':'Dueño'),hint:'Dueño: se descuenta de la renta. Mina: costo de la mina.'},{k:'foto',l:'Soporte',t:'photo',w:1}],save:v=>{v.mq=rec.id?mqOf(rec):curMq().id;upsert('rs',Object.assign({id:rec.id},v));return 'Salida registrada'}})}
-function formRc(rec={}){const P=mqById(rec.id?mqOf(rec):curMq().id);openForm({title:(rec.id?'Editar tanqueo':'Combustible o aceite')+(mqList().length>1?' · '+P.maq:''),rec,fields:[{k:'fecha',l:'Fecha',t:'date',v:rec.fecha||today(),req:1},{k:'tipo',l:'Tipo',t:'select',opts:['ACPM','Gasolina','Aceite','Grasa','Otro'],v:rec.tipo||'ACPM'},{k:'cant',l:'Cantidad',t:'dec',v:rec.cant??''},{k:'und',l:'Unidad',t:'select',opts:['gal','lt','und'],v:rec.und||'gal'},{k:'valor',l:'Valor',t:'money',v:rec.valor??'',req:1},{k:'horo',l:'Horómetro',t:'dec',v:rec.horo??''},{k:'foto',l:'Soporte',t:'photo',w:1}],save:v=>{v.mq=rec.id?mqOf(rec):curMq().id;upsert('rc',Object.assign({id:rec.id},v));return 'Tanqueo registrado'}})}
+function fndField(rec,extra){const fo=L('fnd').filter(f=>fFor(f,'retro')&&(!f.inactivo||f.id===rec.fnd));if(!fo.length&&!rec.fnd&&!extra.fnd)return [];return [{k:'fnd',l:'Pagado con',t:'select',blank:'Pago directo',opts:fo.map(f=>[f.id,(isProv(f)?'Anticipo en ':'Fondo de ')+f.nombre+' · saldo '+fmt(fStats(f).saldo+(rec.fnd===f.id?rec.valor||0:0))]),v:rec.fnd||extra.fnd||'',w:1}]}
+function formRs(rec={},extra={}){const P=mqById(rec.id?mqOf(rec):curMq().id);const ff=fndField(rec,extra);openForm({title:(rec.id?'Editar salida':'Repuesto o reparación')+(mqList().length>1?' · '+P.maq:''),rec,fields:[{k:'fecha',l:'Fecha',t:'date',v:rec.fecha||today(),req:1},{k:'tipo',l:'Tipo',t:'select',opts:['Repuesto','Reparación','Salario','Otro'],v:rec.tipo||'Repuesto'},{k:'concepto',l:'Concepto',v:rec.concepto,req:1,w:1},{k:'valor',l:'Valor',t:'money',v:rec.valor??'',req:1},{k:'asume',l:'Lo asume',t:'select',opts:['Dueño','Mina'],v:rec.asume||(propia(P)?'Mina':'Dueño'),hint:'Dueño: se descuenta de la renta. Mina: costo de la mina.'},...ff,{k:'foto',l:'Soporte',t:'photo',w:1}],save:v=>{if(ff.length)v.fnd=v.fnd||'';v.mq=rec.id?mqOf(rec):curMq().id;upsert('rs',Object.assign({id:rec.id},v));return 'Salida registrada'}})}
+function formRc(rec={},extra={}){const P=mqById(rec.id?mqOf(rec):curMq().id);const ff=fndField(rec,extra);openForm({title:(rec.id?'Editar tanqueo':'Combustible o aceite')+(mqList().length>1?' · '+P.maq:''),rec,fields:[{k:'fecha',l:'Fecha',t:'date',v:rec.fecha||today(),req:1},{k:'tipo',l:'Tipo',t:'select',opts:['ACPM','Gasolina','Aceite','Grasa','Otro'],v:rec.tipo||'ACPM'},{k:'cant',l:'Cantidad',t:'dec',v:rec.cant??''},{k:'und',l:'Unidad',t:'select',opts:['gal','lt','und'],v:rec.und||'gal'},{k:'valor',l:'Valor',t:'money',v:rec.valor??'',req:1},{k:'horo',l:'Horómetro',t:'dec',v:rec.horo??''},...ff,{k:'foto',l:'Soporte',t:'photo',w:1}],save:v=>{if(ff.length)v.fnd=v.fnd||'';v.mq=rec.id?mqOf(rec):curMq().id;upsert('rc',Object.assign({id:rec.id},v));return 'Tanqueo registrado'}})}
 const planField=c=>({k:'plan',l:'Recordatorios sugeridos',t:'checks',opts:PLAN_OPTS[c].map(x=>[x,x]),v:PLAN_OPTS[c],w:1,hint:'Se crean con fechas y periodicidad recomendadas. Los ajustas después en la ficha.'});
 function formMaq(rec={}){const nw=!rec.id;
  const owners=L('own').slice().sort((a,b)=>String(a.nombre).localeCompare(String(b.nombre)));
@@ -1416,14 +1417,17 @@ async function exportXlsx(){
 }
 /* ---------- Fondos y anticipos: recursos entregados a compradores y adelantos a proveedores ---------- */
 const FT={entrega:'Entrega para compras',reemb:'Reembolso de compras',recarga:'Recarga del anticipo',devol:'Devolución'};
-const FPROJ=()=>[['mina','Mina La Fe'],['parcela','Parcela Las Colinas'],...L('inm').map(i=>['inm:'+i.id,i.nombre]),['personal','Gastos personales']];
-const fProj=f=>f.p==='inm'?(byId('inm',f.inm)?.nombre||'Inmuebles'):PNAME[f.p]||f.p;
+const FPROJ=()=>[['mina','Mina La Fe'],['retro','Maquinaria'],['parcela','Parcela Las Colinas'],...L('inm').map(i=>['inm:'+i.id,i.nombre]),['personal','Gastos personales']];
 const fKey=f=>f.p==='inm'?'inm:'+(f.inm||''):f.p;
+const fKeys=f=>Array.isArray(f.ps)&&f.ps.length?f.ps:[fKey(f)];
+const pkName=k=>k.startsWith('inm:')?(byId('inm',k.slice(4))?.nombre||'Inmuebles'):PNAME[k]||k;
+const fProj=f=>fKeys(f).map(pkName).join(', ');
+const fFor=(f,m,inm)=>fKeys(f).some(k=>k===m||(m==='inm'&&(k==='inm:'+inm||k==='inm:')));
 const isProv=f=>f.tipo==='proveedor';
 const fMin=f=>+f.min>0?+f.min:1000000,fDias=f=>+f.dias>0?+f.dias:7;
 const dDiff=(a,b)=>Math.round((Date.parse(b+'T12:00:00')-Date.parse(a+'T12:00:00'))/864e5);
 function fStats(f){
- const ms=L('fmov').filter(x=>x.fnd===f.id),cs=L('mov').filter(x=>x.fnd===f.id);
+ const ms=L('fmov').filter(x=>x.fnd===f.id),cs=['mov','rs','rc'].flatMap(c=>L(c).filter(x=>x.fnd===f.id).map(x=>Object.assign(Object.create(null),{_c:c},x)));
  const ent=sum(ms.filter(x=>x.tipo!=='devol')),dev=sum(ms.filter(x=>x.tipo==='devol')),comp=sum(cs);const saldo=ent-dev-comp;
  let used=dev+comp,pend='';for(const e of ms.filter(x=>x.tipo!=='devol').sort((a,b)=>a.fecha.localeCompare(b.fecha))){if(used>=e.valor-0.5){used-=e.valor;continue}pend=e.fecha;break}
  const dias=saldo>0.5&&pend?Math.max(0,dDiff(pend,today())):0;
@@ -1444,9 +1448,9 @@ function fAlerts(){
 function fTotals(){const o={leg:0,prov:0,deb:0};L('fnd').forEach(f=>{const s=fStats(f).saldo;if(isProv(f)){if(s>0)o.prov+=s}else if(s>0)o.leg+=s;else o.deb+=-s});return o}
 function vFondos(){
  const pf=V.f.fp||'';const all=L('fnd').slice().sort((a,b)=>(!!a.inactivo-!!b.inactivo)||String(a.nombre).localeCompare(String(b.nombre)));
- const list=all.filter(f=>!pf||fKey(f)===pf);const T=fTotals();const mes=thisMonth();
- const ent=sum(L('fmov').filter(x=>x.tipo!=='devol'&&x.fecha.startsWith(mes)&&(!pf||fKey(byId('fnd',x.fnd)||{})===pf)));
- const used=[...new Set(all.map(fKey))];
+ const list=all.filter(f=>!pf||fKeys(f).includes(pf));const T=fTotals();const mes=thisMonth();
+ const ent=sum(L('fmov').filter(x=>x.tipo!=='devol'&&x.fecha.startsWith(mes)&&(!pf||fKeys(byId('fnd',x.fnd)||{}).includes(pf))));
+ const used=[...new Set(all.flatMap(fKeys))];
  const card=f=>{const st=fStats(f),s=fState(f,st);const pct=st.ent?Math.min(100,(st.comp+st.dev)/st.ent*100):0;const col=s.t==='ba'?'#ff4f73':s.t==='wa'?'#ffb547':'#1fe0a0';
   return `<div class="card fcard${f.inactivo?' off':''}"><div class="split" style="flex-wrap:nowrap;align-items:flex-start"><div style="min-width:0"><span class="tag ${isProv(f)?'inversion':'costo'}">${isProv(f)?'Anticipo a proveedor':'Fondo de comprador'}</span><div class="fnm">${esc(f.nombre)}</div><div class="mut" style="font-size:13px">${esc(fProj(f))}${f.inactivo?' · inactivo':''}</div></div><div style="text-align:right;flex:none"><div class="mut" style="font:600 10.5px var(--f-disp);letter-spacing:.12em;text-transform:uppercase">${s.l}</div><div style="font:700 22px var(--f-disp);color:${col}">${fmt(s.v)}</div></div></div>
   <div class="fbar"><i style="width:${pct}%"></i></div>
@@ -1460,10 +1464,10 @@ function vFondos(){
  ${list.length?`<div class="grid fgrid">${list.map(card).join('')}</div>`:'<div class="card"><div class="empty">Sin fondos registrados. Crea un comprador o un proveedor con anticipo.</div></div>'}`;
 }
 function formFnd(rec={},tipo){
- const tp=rec.tipo||tipo||'comprador';const prov=tp==='proveedor';const pk=rec.p?fKey(rec):(V.f.fp||'mina');
- openForm({title:(rec.id?'Editar ':'Nuevo ')+(prov?'proveedor con anticipo':'comprador'),rec,fields:[{k:'nombre',l:prov?'Proveedor':'Nombre del comprador',v:rec.nombre,req:1,ph:prov?'Ej. Ferretería PVCentro':'Ej. Juan Pérez',w:1},{k:'pk',l:'Proyecto',t:'select',opts:FPROJ(),v:pk,req:1},{k:'tel',l:'Celular',t:'tel',v:rec.tel},
+ const tp=rec.tipo||tipo||'comprador';const prov=tp==='proveedor';const pks=rec.id?fKeys(rec):[V.f.fp||'mina'];
+ openForm({title:(rec.id?'Editar ':'Nuevo ')+(prov?'proveedor con anticipo':'comprador'),rec,fields:[{k:'nombre',l:prov?'Proveedor':'Nombre del comprador',v:rec.nombre,req:1,ph:prov?'Ej. Ferretería PVCentro':'Ej. Juan Pérez',w:1},{k:'ps',l:'Proyectos donde compra',t:'checks',opts:FPROJ(),v:pks,w:1,hint:'El mismo fondo sirve para todos los proyectos marcados.'},{k:'tel',l:'Celular',t:'tel',v:rec.tel},
   prov?{k:'min',l:'Avisar cuando el saldo baje de',t:'money',v:rec.min||1000000}:{k:'dias',l:'Días máximos para legalizar',t:'dec',v:rec.dias||7},{k:'nota',l:'Nota',v:rec.nota},{k:'inactivo',l:'Estado',t:'select',opts:[['','Activo'],['1','Inactivo']],v:rec.inactivo?'1':''}],
-  save:v=>{const [p,inm]=v.pk.split(':');delete v.pk;Object.assign(v,{tipo:tp,p,inm:inm||'',inactivo:v.inactivo==='1'});upsert('fnd',Object.assign({id:rec.id},v));return prov?'Proveedor guardado':'Comprador guardado'}});
+  save:v=>{if(!v.ps.length){toast('Marca al menos un proyecto');return false}const [p,inm]=v.ps[0].split(':');Object.assign(v,{tipo:tp,p,inm:inm||'',inactivo:v.inactivo==='1'});upsert('fnd',Object.assign({id:rec.id},v));return prov?'Proveedor guardado':'Comprador guardado'}});
 }
 function formFmov(f,rec={},dev,back){
  const prov=isProv(f);const isDev=dev||rec.tipo==='devol';const st=fStats(f);
@@ -1474,12 +1478,20 @@ function formFmov(f,rec={},dev,back){
   save:v=>{if(!(v.valor>0)){toast('El valor debe ser mayor que cero');return false}v.tipo=v.tipo||opts[0][0];v.fnd=f.id;if(isDev&&v.valor>st.saldo+(rec.valor||0)+0.5){toast('La devolución supera el saldo por legalizar ('+fmt(st.saldo+(rec.valor||0))+')');return false}upsert('fmov',Object.assign({id:rec.id},v));return isDev?'Devolución registrada':prov?'Anticipo recargado':'Entrega registrada'}});
 }
 function fndCompra(f){
- const subs=(modOf(f.p)?.subs||[]).filter(s=>s.cats&&!s.sp);
- if(subs.length===1)return formMov(f.p,subs[0].id,{},{fnd:f.id,inm:f.inm||undefined});
- openForm({title:(isProv(f)?'Retiro de insumos · ':'Compra · ')+f.nombre,top:`<div class="note">Elige el rubro de ${esc(fProj(f))} al que corresponde la compra.</div>`,fields:[{k:'s',l:'Rubro',t:'select',opts:subs.map(s=>[s.id,s.name]),v:subs.find(s=>s.id==='materiales')?.id||subs[0]?.id,w:1}],save:v=>{setTimeout(()=>formMov(f.p,v.s,{},{fnd:f.id,inm:f.inm||undefined}),30);return 'Completa los datos de la compra'}});
+ const keys=fKeys(f);const many=keys.length>1;const opts=[];
+ keys.forEach(k=>{const [m,inm]=k.split(':');
+  if(m==='retro'){opts.push(['retro|rs',(many?'Maquinaria › ':'')+'Repuestos y reparaciones'],['retro|rc',(many?'Maquinaria › ':'')+'Combustible y aceites']);return}
+  (modOf(m)?.subs||[]).filter(s=>s.cats&&!s.sp).forEach(s=>opts.push([k+'|'+s.id,(many?pkName(k)+' › ':'')+s.name]))});
+ const mqs=mqList().filter(m=>!m.inactivo);
+ const go=(v)=>{const [k,sid]=v.r.split('|');const [m,inm]=k.split(':');
+  if(m==='retro'){if(v.mq)V.mq=v.mq;return sid==='rs'?formRs({},{fnd:f.id}):formRc({},{fnd:f.id})}
+  formMov(m,sid,{},{fnd:f.id,inm:inm||undefined})};
+ if(opts.length===1&&!(opts[0][0].startsWith('retro')&&mqs.length>1))return go({r:opts[0][0],mq:mqs[0]?.id});
+ const def=opts.find(o=>/\|materiales$/.test(o[0]))?.[0]||opts[0]?.[0];
+ openForm({title:(isProv(f)?'Retiro de insumos · ':'Compra · ')+f.nombre,top:`<div class="note">¿A qué proyecto y rubro corresponde la compra?</div>`,fields:[{k:'r',l:'Proyecto y rubro',t:'select',opts,v:def,w:1},...(mqs.length>1?[{k:'mq',l:'Máquina',t:'select',opts:mqs.map(m=>[m.id,m.maq]),v:curMq().id,w:1,when:v=>String(v.r).startsWith('retro')}]:[])],save:v=>{if(!v.mq)v.mq=mqs[0]?.id;setTimeout(()=>go(v),30);return 'Completa los datos de la compra'}});
 }
 function fndFilas(f){
- const st=fStats(f);const rows=[...st.ms.map(x=>({fecha:x.fecha,c:'fmov',id:x.id,txt:FT[x.tipo]||x.tipo,det:x.nota||'',in:x.tipo==='devol'?0:x.valor,out:x.tipo==='devol'?x.valor:0,r:x})),...st.cs.map(x=>({fecha:x.fecha,c:'mov',id:x.id,txt:(isProv(f)?'Retiro: ':'Compra: ')+(x.concepto||x.cat||''),det:[subOf(x.p,x.s)?.name,x.cat,x.tercero].filter(Boolean).join(' · '),in:0,out:x.valor,r:x}))].sort((a,b)=>a.fecha.localeCompare(b.fecha)||(b.in-a.in));
+ const st=fStats(f);const rows=[...st.ms.map(x=>({fecha:x.fecha,c:'fmov',id:x.id,txt:FT[x.tipo]||x.tipo,det:x.nota||'',in:x.tipo==='devol'?0:x.valor,out:x.tipo==='devol'?x.valor:0,r:x})),...st.cs.map(x=>x._c==='mov'?{fecha:x.fecha,c:'mov',id:x.id,txt:(isProv(f)?'Retiro: ':'Compra: ')+(x.concepto||x.cat||''),det:[fKeys(f).length>1?pkName(x.p==='inm'?'inm:'+x.inm:x.p):'',subOf(x.p,x.s)?.name,x.cat,x.tercero].filter(Boolean).join(' · '),in:0,out:x.valor,r:x}:{fecha:x.fecha,c:x._c,id:x.id,txt:x._c==='rs'?(isProv(f)?'Retiro: ':'Compra: ')+(x.concepto||''):'Combustible: '+(x.tipo||'')+(x.cant?' '+fg(x.cant)+' '+(x.und||''):''),det:['Maquinaria',mqById(mqOf(x)).maq,x._c==='rs'?x.tipo:''].filter(Boolean).join(' · '),in:0,out:x.valor,r:x})].sort((a,b)=>a.fecha.localeCompare(b.fecha)||(b.in-a.in));
  let s=0;rows.forEach(r=>{s+=r.in-r.out;r.saldo=s});return {st,rows};
 }
 function fndVer(id){
@@ -1489,7 +1501,7 @@ function fndVer(id){
  <div class="mut" style="font-size:13px;margin-bottom:10px">${isProv(f)?'Anticipo a proveedor':'Fondo de comprador'} · ${esc(fProj(f))}${f.tel?' · '+esc(f.tel):''}</div>
  <div class="hstat"><div><small>${isProv(f)?'Adelantado':'Entregado'}</small><b>${fmt(st.ent)}</b></div><div><small>${isProv(f)?'Retirado':'Legalizado'}</small><b>${fmt(st.comp)}</b></div><div><small>Devuelto</small><b>${fmt(st.dev)}</b></div><div><small>${s.l}</small><b class="${s.t==='ba'?'neg':s.t==='ok'?'pos':'gold'}">${fmt(s.v)}</b></div></div>
  <div class="tw" style="margin-top:14px"><table class="t cards"><thead><tr><th>Fecha</th><th>Movimiento</th><th class="n">Entra</th><th class="n">Sale</th><th class="n">Saldo</th><th></th></tr></thead><tbody>
- ${rows.slice().reverse().map(r=>`<tr class="rw"><td class="num" data-l="Fecha">${fd(r.fecha)}</td><td class="p">${esc(r.txt)}${r.det?`<div class="mut" style="font-size:12px">${esc(r.det)}</div>`:''}</td><td class="n" data-l="Entra">${r.in?fmt(r.in):''}</td><td class="n" data-l="Sale">${r.out?fmt(-r.out):''}</td><td class="n ${r.saldo<-0.5?'neg':''}" data-l="Saldo">${fmt(r.saldo)}</td><td class="acts">${photoBtn(r.r)}${r.c==='fmov'?`<button class="ib edit-only" data-act="fmovEdit" data-id="${r.id}" title="Editar">${ic('edit')}</button><button class="ib dan del-only" data-act="del" data-c="fmov" data-id="${r.id}" title="Eliminar">${ic('trash')}</button>`:`<button class="ib edit-only" data-act="edit" data-c="mov" data-id="${r.id}" title="Editar compra">${ic('edit')}</button>`}</td></tr>`).join('')||'<tr><td colspan="6"><div class="empty">Sin movimientos.</div></td></tr>'}
+ ${rows.slice().reverse().map(r=>`<tr class="rw"><td class="num" data-l="Fecha">${fd(r.fecha)}</td><td class="p">${esc(r.txt)}${r.det?`<div class="mut" style="font-size:12px">${esc(r.det)}</div>`:''}</td><td class="n" data-l="Entra">${r.in?fmt(r.in):''}</td><td class="n" data-l="Sale">${r.out?fmt(-r.out):''}</td><td class="n ${r.saldo<-0.5?'neg':''}" data-l="Saldo">${fmt(r.saldo)}</td><td class="acts">${photoBtn(r.r)}${r.c==='fmov'?`<button class="ib edit-only" data-act="fmovEdit" data-id="${r.id}" title="Editar">${ic('edit')}</button><button class="ib dan del-only" data-act="del" data-c="fmov" data-id="${r.id}" title="Eliminar">${ic('trash')}</button>`:`<button class="ib edit-only" data-act="edit" data-c="${r.c}" data-id="${r.id}" title="Editar compra">${ic('edit')}</button>`}</td></tr>`).join('')||'<tr><td colspan="6"><div class="empty">Sin movimientos.</div></td></tr>'}
  </tbody></table></div></div>
  <div class="sft" style="flex-wrap:wrap"><button class="btn gh" data-act="dlRep" data-k="fnd" data-id="${f.id}">${ic('dl')}Descargar</button><button class="btn gh" data-act="fndTxt" data-id="${f.id}">${ic('copy')}Copiar para WhatsApp</button>${canEdit()?`<button class="btn gh" data-act="edit" data-c="fnd" data-id="${f.id}">${ic('edit')}Editar</button>${!isProv(f)&&st.saldo>0.5?`<button class="btn gh" data-act="fndDev" data-id="${f.id}">Devolución</button>`:''}<button class="btn gh" data-act="fndComp" data-id="${f.id}">${ic('plus')}${isProv(f)?'Retiro':'Compra'}</button><button class="btn pri" data-act="fndEnt" data-id="${f.id}">${ic('cash')}${isProv(f)?'Recargar':'Entregar'}</button>`:''}</div>`;
  $('#modal').hidden=false;hydrate($('#sheet'));
