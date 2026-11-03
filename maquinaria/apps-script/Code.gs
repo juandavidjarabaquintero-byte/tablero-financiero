@@ -71,7 +71,7 @@ const ROLES = {
   aux: {scope: 'full', write: true, read: function () { return true; }},
   conta: {scope: 'read', write: false, read: function () { return true; }}
 };
-const ROLE_NAMES = {admin: 'ADMINISTRADOR', aux: 'AUXILIAR DE CAMPO', conta: 'DUEÑO (SOLO LECTURA)'};
+const ROLE_NAMES = {admin: 'ADMINISTRADOR DE LA APP', aux: 'AUXILIAR DE MINA', conta: 'DUEÑO (SOLO VE)'};
 const STUB = ['abonos', 'per', 'prest', 'inm', 'veh', 'cab', 'eq', 'own', 'cortes', 'obl'];
 
 /* ===================== Instalación ===================== */
@@ -201,6 +201,7 @@ function doPost(e) {
     const role = who.role;
     const R = ROLES[role];
     if (body.op === 'ping') return json_({ok: true, role: role, scope: R.scope, own: who.own || '', serverTime: Date.now(), ver: VERSION});
+    if (body.op === 'keys') { if (role !== 'admin') return json_({ok: false, error: 'Solo el administrador puede invitar'}); const pp = PropertiesService.getScriptProperties(); return json_({ok: true, keys: {admin: pp.getProperty('TOKEN_admin'), aux: pp.getProperty('TOKEN_aux'), conta: pp.getProperty('TOKEN_conta')}}); }
     if (body.op === 'sync') return json_(sync_(body, role, who.own));
     if (body.op === 'file') { if (!R.write) return json_({ok: false, error: 'Sin permiso de escritura'}); return json_(saveFile_(body)); }
     if (body.op === 'getFile') return json_(getFile_(body));
