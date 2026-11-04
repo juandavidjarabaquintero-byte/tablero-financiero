@@ -1859,7 +1859,7 @@ async function exportPdf(){
 
 /* ---------- sincronización (Apps Script) ---------- */
 const NEWC=['maq','own','fnd','fmov'];
-const SRV_MIN=20261027;let MANIF_OK=false;
+const SRV_MIN=20261104;let MANIF_OK=false;
 const manifest=()=>{const m={};COLLS.forEach(c=>{const o={};(S[c]||[]).forEach(r=>{if(r.id)o[r.id]=r.del?-(r.upd||1):(r.upd||0)});m[c]=o});return m};
 const srvOld=()=>!!(S.cfg.url&&S.cfg.tokRole&&(S.cfg.srvVer||0)<SRV_MIN);
 const COLLS=['mov','prest','abonos','cab','veh','inm','per','cortes','rh','rs','rc','rcort','cats','eq','obl','maq','own','fnd','fmov'];
