@@ -749,10 +749,13 @@ function vGen(m,sub){
  let rows=L('mov').filter(r=>r.p===m&&r.s===sub.id&&(m!=='inm'||r.inm===V.inm));
  let pre='';if(m==='inm')pre=inmSel(),rows=L('mov').filter(r=>r.p===m&&r.s===sub.id&&r.inm===V.inm);
  const all=rows;const fc=V.f[key];if(fc)rows=rows.filter(r=>r.cat===fc);
- const mes=sum(all.filter(r=>r.fecha.startsWith(thisMonth())));
+ const fm=V.f[key+'@mes']||'';if(fm)rows=rows.filter(r=>r.fecha.startsWith(fm));
+ const meses=[...new Set(all.map(r=>r.fecha.slice(0,7)))].sort().reverse();
+ const mSel=`<select class="search" style="flex:0 0 auto;width:auto;min-width:170px" data-act-change="fmes" data-k="${key}" aria-label="Filtrar por mes"><option value="">Todos los meses</option>${meses.map(k=>`<option value="${k}"${k===fm?' selected':''}>${MES[+k.slice(5)-1]} ${k.slice(0,4)}</option>`).join('')}</select>`;
+ const mk=fm||thisMonth();const mes=sum(all.filter(r=>r.fecha.startsWith(mk)));
  const nat=sub.nat;
- return pre+`<div class="grid k4">${kpi('Total acumulado',fmt(sum(all)),`${all.length} registros`,nat==='inversion'?'c-vi':nat==='costo'?'c-wa':'c-ba')}${kpi('Este mes',fmt(mes),MES[new Date().getMonth()]+' '+new Date().getFullYear(),'c-cy')}${extraK(m,sub,all)}${kpi('Último registro',all.length?fd(all.map(r=>r.fecha).sort().pop()):'—','Clasificación: '+NATL[nat],'c-te')}</div>
- ${arrCard(all)}<div class="card">${tbar(`<button class="btn pri edit-only" data-act="newMov" data-m="${m}" data-s="${sub.id}">${ic('plus')}Registrar</button>`)}<div style="margin:12px 0">${catChips(cats,key)}</div>${movTable(rows,{tl:sub.tl})}</div>`;
+ return pre+`<div class="grid k4">${kpi('Total acumulado',fmt(sum(all)),`${all.length} registros`,nat==='inversion'?'c-vi':nat==='costo'?'c-wa':'c-ba')}${kpi(fm?'Mes seleccionado':'Este mes',fmt(mes),MES[+mk.slice(5)-1]+' '+mk.slice(0,4),'c-cy')}${extraK(m,sub,all)}${kpi('Último registro',all.length?fd(all.map(r=>r.fecha).sort().pop()):'—','Clasificación: '+NATL[nat],'c-te')}</div>
+ ${arrCard(all)}<div class="card">${tbar(`<button class="btn pri edit-only" data-act="newMov" data-m="${m}" data-s="${sub.id}">${ic('plus')}Registrar</button>${mSel}`)}<div style="margin:12px 0">${catChips(cats,key)}</div>${movTable(rows,{tl:sub.tl})}</div>`;
 }
 
 function extraK(m,sub,all){
@@ -1972,6 +1975,7 @@ $('#modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal()})
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#modal').hidden)closeModal()});
 document.addEventListener('change',e=>{
  const k=e.target.dataset.actChange;
+ if(k==='fmes'){V.f[e.target.dataset.k+'@mes']=e.target.value;render()}
  if(k==='rf'||k==='rt'){if(e.target.value){V.f[k]=e.target.value;V.f.custom=1;render()}}
  if(k==='role'){const nv=e.target.value;const need=S.cfg.pin&&((nv==='admin'&&S.cfg.role!=='admin')||(nv==='aux'&&!['admin','aux'].includes(S.cfg.role)));
   const apply=()=>{S.cfg.role=nv;save();if(nv==='dueno')go('retro','dueno');else render();toast('Perfil: '+ROLES[nv])};
