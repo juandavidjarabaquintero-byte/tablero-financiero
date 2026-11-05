@@ -10,7 +10,7 @@
  *  4. Copia la URL de la aplicación web y la clave que muestra el registro de ejecución.
  */
 
-const VERSION = 20261104;
+const VERSION = 20261105;
 const CFG = {
   SHEET_ID: '1ggJdlmDgeIXk0o0W41a9pRzUtoiHNmZOvs5IT0KSpTk',
   FOLDER_ID: '1pk6m_2pQ6HL6RBlJjWK2bNVr6sAiChGH',
@@ -217,6 +217,7 @@ function doPost(e) {
     if (body.op === 'report') { if (!R.write) return json_({ok: false, error: 'Sin permiso'}); renderReport_(SpreadsheetApp.openById(CFG.SHEET_ID), body.data || {}); return json_({ok: true}); }
     return json_({ok: false, error: 'Operación desconocida'});
   } catch (err) {
+    console.error(err && err.stack || err);
     return json_({ok: false, error: String(err && err.message || err)});
   }
 }
@@ -482,14 +483,6 @@ function validNew_(c, r) {
   return req.every(function (k) { if (r[k] === undefined || r[k] === '' || r[k] === null) return false; if (k === 'valor') return Number(r[k]) > 0; return true; });
 }
 
-// Listas de Proyecto y Rubro siempre al día; si hay un valor nuevo no frena la sincronización.
-function movValid_(sh, n) {
-  const rows = Math.max(sh.getMaxRows() - 1, n);
-  const subs = [];
-  Object.keys(MODS).forEach(function (k) { Object.keys(MODS[k].subs).forEach(function (s) { if (subs.indexOf(MODS[k].subs[s]) < 0) subs.push(MODS[k].subs[s]); }); });
-  sh.getRange(2, 2, rows, 1).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(Object.keys(MODS).map(function (k) { return MODS[k].name; }).concat(['Inmuebles', 'Maquinaria']), true).setAllowInvalid(true).build());
-  sh.getRange(2, 3, rows, 1).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(subs, true).setAllowInvalid(true).build());
-}
 function writeTab_(T, recs, ctx) {
   const ok = recs.filter(function (r) { return !r.__skip; });
   const skipped = recs.filter(function (r) { return r.__skip; }).map(function (r) { return T.rows[r.__i]; });
@@ -497,7 +490,6 @@ function writeTab_(T, recs, ctx) {
   if (hasF) ok.sort(function (a, b) { return String(a.fecha || '').localeCompare(String(b.fecha || '')) || (a.cre || 0) - (b.cre || 0); });
   const out = ok.map(function (r) { return recToRow_(T, r, ctx); }).concat(skipped);
   const prev = T.rows.length;
-  if (T.c === 'mov' && out.length) movValid_(T.sh, out.length + 1);
   if (out.length) T.sh.getRange(2, 1, out.length, T.width).setValues(out);
   if (prev > out.length) T.sh.getRange(2 + out.length, 1, prev - out.length, T.width).clearContent();
 }
@@ -554,7 +546,7 @@ function sync_(body, role, own) {
     }
     try { if (legacy_(ss, R, T, now)) acc++; } catch (e) { console.error('legacy', e); }
     if (acc) { ctx = ctx_(R); if (T.abonos.dirty) T.prest.dirty = true; ['inm', 'veh', 'cab', 'per', 'eq', 'prest'].forEach(function (c) { if (T[c].dirty) { T.mov.dirty = true; T.obl.dirty = true; T.abonos.dirty = true; } }); if (T.fmov.dirty || T.mov.dirty || T.rs.dirty || T.rc.dirty) T.fnd.dirty = true; if (T.fnd.dirty) { T.fmov.dirty = true; T.mov.dirty = true; T.rs.dirty = true; T.rc.dirty = true; } }
-    COLLS.forEach(function (c) { if (T[c].dirty) writeTab_(T[c], R[c], ctx); });
+    COLLS.forEach(function (c) { if (T[c].dirty) { try { writeTab_(T[c], R[c], ctx); SpreadsheetApp.flush(); } catch (e) { throw new Error('Pestaña ' + SCHEMA[c].tab + ': ' + (e && e.message || e)); } } });
     const since = Number(body.since) || 0;
     const out = [];
     let mine = null;
